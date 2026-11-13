@@ -1,11 +1,11 @@
 import { ColumnDefinition, OccurrenceRow } from '../types/occurrence';
 import {
   NATURE_CATALOG,
-  NatureCatalogEntry,
   OccurrenceClassification,
   OccurrenceSummaryReport,
   GroupSummaryRow,
   NatureSummaryRow,
+  SubGroupSummaryBlock,
   detectNatureCandidates,
 } from './natureCatalog';
 
@@ -64,7 +64,6 @@ export function classifyFilteredRows(
     }
 
     if (candidates.length > 1) {
-      // Pré-seleciona a primeira candidata como sugestão inicial, mas sinaliza para revisão
       return {
         rowIndex,
         rawText,
@@ -161,23 +160,56 @@ export function buildOccurrenceSummary(
 
   const groupOrder = new Map(byGroup.map((g, i) => [g.group, i]));
 
-  const byNature: NatureSummaryRow[] = Array.from(natureCounts.values())
-    .map((n) => ({
-      ...n,
-      percentage: totalOccurrences > 0 ? (n.count / totalOccurrences) * 100 : 0,
+  const allNaturesWithPct: NatureSummaryRow[] = Array.from(natureCounts.values()).map((n) => ({
+    ...n,
+    percentage: totalOccurrences > 0 ? (n.count / totalOccurrences) * 100 : 0,
+  }));
+
+  // Agrupa por Grupo + Sub-grupo e calcula os subtotais de cada Sub-grupo
+  const subGroupMap = new Map<string, SubGroupSummaryBlock>();
+
+  for (const item of allNaturesWithPct) {
+    const key = `${item.group}|||${item.subGroup}`;
+    const block = subGroupMap.get(key);
+    if (block) {
+      block.items.push(item);
+      block.subtotalCount += item.count;
+    } else {
+      subGroupMap.set(key, {
+        group: item.group,
+        subGroup: item.subGroup,
+        items: [item],
+        subtotalCount: item.count,
+        subtotalPercentage: 0,
+      });
+    }
+  }
+
+  const bySubGroup: SubGroupSummaryBlock[] = Array.from(subGroupMap.values())
+    .map((block) => ({
+      ...block,
+      subtotalPercentage: totalOccurrences > 0 ? (block.subtotalCount / totalOccurrences) * 100 : 0,
+      items: block.items.sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.code.localeCompare(b.code, 'pt-BR');
+      }),
     }))
     .sort((a, b) => {
       const gA = groupOrder.get(a.group) ?? 999;
       const gB = groupOrder.get(b.group) ?? 999;
       if (gA !== gB) return gA - gB;
-      if (b.count !== a.count) return b.count - a.count;
-      return a.code.localeCompare(b.code, 'pt-BR');
+      if (b.subtotalCount !== a.subtotalCount) return b.subtotalCount - a.subtotalCount;
+      return a.subGroup.localeCompare(b.subGroup, 'pt-BR');
     });
+
+  // byNature ordenado acompanhando os blocos de sub-grupo
+  const byNature: NatureSummaryRow[] = bySubGroup.flatMap((block) => block.items);
 
   return {
     totalOccurrences,
     totalClassified: totalOccurrences - unclassifiedCount,
     byGroup,
+    bySubGroup,
     byNature,
     unclassifiedCount,
     multiplePendingCount,

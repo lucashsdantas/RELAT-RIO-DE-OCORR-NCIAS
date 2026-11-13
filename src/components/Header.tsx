@@ -1,18 +1,12 @@
 import React from 'react';
-import { Download, Sparkles } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { FIXED_LOGO_URL } from '../utils/sampleData';
 
 interface HeaderProps {
-  onLoadSample: () => void;
   onExportPortableHtml: () => void;
-  hasData: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({
-  onLoadSample,
-  onExportPortableHtml,
-  hasData,
-}) => {
+export const Header: React.FC<HeaderProps> = ({ onExportPortableHtml }) => {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -60,17 +54,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zone 3: Primary Action */}
           <div className="flex items-center gap-3 shrink-0">
-            {!hasData && (
-              <button
-                type="button"
-                onClick={onLoadSample}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-sky-600" />
-                <span>Carregar Exemplo</span>
-              </button>
-            )}
-
             <button
               type="button"
               onClick={onExportPortableHtml}

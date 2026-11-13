@@ -32,10 +32,19 @@ export interface NatureSummaryRow {
   percentage: number;
 }
 
+export interface SubGroupSummaryBlock {
+  group: string;
+  subGroup: string;
+  items: NatureSummaryRow[];
+  subtotalCount: number;
+  subtotalPercentage: number;
+}
+
 export interface OccurrenceSummaryReport {
   totalOccurrences: number;
   totalClassified: number;
   byGroup: GroupSummaryRow[];
+  bySubGroup: SubGroupSummaryBlock[];
   byNature: NatureSummaryRow[];
   unclassifiedCount: number;
   multiplePendingCount: number;

@@ -5,14 +5,14 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ShieldCheck, FileText, Download, Table2, FileCheck2 } from 'lucide-react';
-import { OccurrenceDataset, ReportConfig } from './types/occurrence';
+import { ColumnDefinition, OccurrenceDataset, ReportConfig } from './types/occurrence';
 import { parseOccurrenceInput, REQUIRED_STANDARD_COLUMNS } from './utils/htmlParser';
 import {
   createPdfInstance,
   generatePdfBlobUrl,
   generatePdfFileName,
 } from './utils/pdfGenerator';
-import { SAMPLE_TSV_SOURCE, loadFixedLogoBase64 } from './utils/sampleData';
+import { loadFixedLogoBase64 } from './utils/sampleData';
 import { classifyFilteredRows, buildOccurrenceSummary } from './utils/natureSummary';
 import { exportStandaloneSingleFileHtml } from './utils/portableExporter';
 import { Header } from './components/Header';
@@ -23,6 +23,9 @@ import { NatureClassificationPanel } from './components/NatureClassificationPane
 import { DataTable } from './components/DataTable';
 import { DocumentPreview } from './components/DocumentPreview';
 import { PdfPreviewModal } from './components/PdfPreviewModal';
+
+const STORAGE_CONFIG_KEY = 'relatorio_ocorrencias_config_v1';
+const STORAGE_HIDDEN_COLS_KEY = 'relatorio_ocorrencias_hidden_cols_v1';
 
 function getDefaultShiftRange(): { start: string; end: string } {
   const now = new Date();
@@ -37,17 +40,8 @@ function getDefaultShiftRange(): { start: string; end: string } {
   };
 }
 
-export default function App() {
-  const defaultRange = useMemo(() => getDefaultShiftRange(), []);
-
-  const [dataset, setDataset] = useState<OccurrenceDataset | null>(null);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [warningMessages, setWarningMessages] = useState<string[]>([]);
-  const [previewTab, setPreviewTab] = useState<'document' | 'table'>('document');
-  const [natureOverrides, setNatureOverrides] = useState<Record<number, string>>({});
-
-  const [config, setConfig] = useState<ReportConfig>({
+function loadSavedConfig(defaultRange: { start: string; end: string }): ReportConfig {
+  const baseConfig: ReportConfig = {
     title: 'RELATÓRIO OPERACIONAL DE ATENDIMENTOS E OCORRÊNCIAS',
     subtitle: '4º Batalhão de Bombeiros Militar — Controle Operacional',
     department: 'B-3 / Coordenação Operacional',
@@ -63,12 +57,63 @@ export default function App() {
       'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE VIA SISTEMA DE RELATÓRIOS',
     filterStatus: 'all',
     searchQuery: '',
-  });
+  };
+
+  try {
+    const raw = localStorage.getItem(STORAGE_CONFIG_KEY);
+    if (!raw) return baseConfig;
+    const parsed = JSON.parse(raw);
+    return {
+      ...baseConfig,
+      ...parsed,
+      logoBase64: null, // Logo é carregada separadamente da URL fixa
+      filterStatus: 'all',
+      searchQuery: '',
+    };
+  } catch {
+    return baseConfig;
+  }
+}
+
+function loadHiddenColumnLabels(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_HIDDEN_COLS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHiddenColumnLabels(labels: string[]) {
+  try {
+    localStorage.setItem(STORAGE_HIDDEN_COLS_KEY, JSON.stringify(labels));
+  } catch {
+    // Ignora falha de quota ou modo privado
+  }
+}
+
+export default function App() {
+  const defaultRange = useMemo(() => getDefaultShiftRange(), []);
+
+  const [dataset, setDataset] = useState<OccurrenceDataset | null>(null);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warningMessages, setWarningMessages] = useState<string[]>([]);
+  const [previewTab, setPreviewTab] = useState<'document' | 'table'>('document');
+  const [natureOverrides, setNatureOverrides] = useState<Record<number, string>>({});
+  const [hiddenColumnLabels, setHiddenColumnLabels] = useState<string[]>(() =>
+    loadHiddenColumnLabels()
+  );
+
+  const [config, setConfig] = useState<ReportConfig>(() => loadSavedConfig(defaultRange));
 
   const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
 
+  // Carrega a logo institucional fixa em Base64 PNG para o pdfmake
   useEffect(() => {
     let active = true;
     loadFixedLogoBase64().then((base64) => {
@@ -76,16 +121,44 @@ export default function App() {
         setConfig((prev) => ({ ...prev, logoBase64: base64 }));
       }
     });
-
-    const initialResult = parseOccurrenceInput(SAMPLE_TSV_SOURCE, undefined, 'Exemplo de Plantão');
-    if (initialResult.success && initialResult.dataset) {
-      setDataset(initialResult.dataset);
-    }
-
     return () => {
       active = false;
     };
   }, []);
+
+  // Salva automaticamente as configurações e parâmetros no localStorage sempre que alterados
+  useEffect(() => {
+    try {
+      const toPersist = {
+        title: config.title,
+        subtitle: config.subtitle,
+        department: config.department,
+        serviceWing: config.serviceWing,
+        startDateTime: config.startDateTime,
+        endDateTime: config.endDateTime,
+        orientation: config.orientation,
+        showZebra: config.showZebra,
+        repeatHeader: config.repeatHeader,
+        compactMode: config.compactMode,
+        confidentialityText: config.confidentialityText,
+      };
+      localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(toPersist));
+    } catch {
+      // Ignora erro caso armazenamento esteja indisponível
+    }
+  }, [
+    config.title,
+    config.subtitle,
+    config.department,
+    config.serviceWing,
+    config.startDateTime,
+    config.endDateTime,
+    config.orientation,
+    config.showZebra,
+    config.repeatHeader,
+    config.compactMode,
+    config.confidentialityText,
+  ]);
 
   const handleProcessInput = useCallback(
     (rawText: string, clipboardHtml?: string, sourceName?: string) => {
@@ -96,7 +169,17 @@ export default function App() {
       setTimeout(() => {
         const result = parseOccurrenceInput(rawText, clipboardHtml, sourceName);
         if (result.success && result.dataset) {
-          setDataset(result.dataset);
+          // Aplica as preferências salvas de colunas ocultas
+          const savedHiddenSet = new Set(hiddenColumnLabels.map((l) => l.toUpperCase()));
+          const headersWithSavedVisibility = result.dataset.headers.map((h) => ({
+            ...h,
+            visible: !savedHiddenSet.has(h.label.toUpperCase()),
+          }));
+
+          setDataset({
+            ...result.dataset,
+            headers: headersWithSavedVisibility,
+          });
           setNatureOverrides({});
           if (result.warnings && result.warnings.length > 0) {
             setWarningMessages(result.warnings);
@@ -107,51 +190,90 @@ export default function App() {
         setIsProcessing(false);
       }, 100);
     },
-    []
+    [hiddenColumnLabels]
   );
 
-  const handleLoadSample = useCallback(() => {
-    handleProcessInput(SAMPLE_TSV_SOURCE, undefined, 'Exemplo de Plantão');
-  }, [handleProcessInput]);
+  const handleClearData = useCallback(() => {
+    setDataset(null);
+    setNatureOverrides({});
+    setErrorMessage(null);
+    setWarningMessages([]);
+    setConfig((prev) => ({ ...prev, filterStatus: 'all', searchQuery: '' }));
+  }, []);
 
   const handleChangeConfig = useCallback((newConfig: Partial<ReportConfig>) => {
     setConfig((prev) => ({ ...prev, ...newConfig }));
   }, []);
 
-  const handleToggleColumn = useCallback((key: string) => {
-    setDataset((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        headers: prev.headers.map((h) => (h.key === key ? { ...h, visible: !h.visible } : h)),
-      };
-    });
+  const syncHiddenColumnsFromHeaders = useCallback((headers: ColumnDefinition[]) => {
+    const nextHidden = headers.filter((h) => !h.visible).map((h) => h.label);
+    setHiddenColumnLabels(nextHidden);
+    saveHiddenColumnLabels(nextHidden);
   }, []);
 
-  const handleToggleAllColumns = useCallback((visible: boolean) => {
-    setDataset((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        headers: prev.headers.map((h) => ({ ...h, visible })),
-      };
-    });
-  }, []);
+  const handleToggleColumn = useCallback(
+    (key: string) => {
+      if (dataset) {
+        const nextHeaders = dataset.headers.map((h) =>
+          h.key === key ? { ...h, visible: !h.visible } : h
+        );
+        setDataset({ ...dataset, headers: nextHeaders });
+        syncHiddenColumnsFromHeaders(nextHeaders);
+      } else {
+        const label = key;
+        const exists = hiddenColumnLabels.includes(label);
+        const nextHidden = exists
+          ? hiddenColumnLabels.filter((l) => l !== label)
+          : [...hiddenColumnLabels, label];
+        setHiddenColumnLabels(nextHidden);
+        saveHiddenColumnLabels(nextHidden);
+      }
+    },
+    [dataset, hiddenColumnLabels, syncHiddenColumnsFromHeaders]
+  );
+
+  const handleToggleAllColumns = useCallback(
+    (visible: boolean) => {
+      if (dataset) {
+        const nextHeaders = dataset.headers.map((h) => ({ ...h, visible }));
+        setDataset({ ...dataset, headers: nextHeaders });
+        syncHiddenColumnsFromHeaders(nextHeaders);
+      } else {
+        const nextHidden = visible ? [] : [...REQUIRED_STANDARD_COLUMNS];
+        setHiddenColumnLabels(nextHidden);
+        saveHiddenColumnLabels(nextHidden);
+      }
+    },
+    [dataset, syncHiddenColumnsFromHeaders]
+  );
 
   const handleResetColumnsToStandard = useCallback(() => {
-    setDataset((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        headers: prev.headers.map((h) => {
-          const isStd = REQUIRED_STANDARD_COLUMNS.some((std) =>
-            h.label.toUpperCase().includes(std.toUpperCase())
-          );
-          return { ...h, visible: isStd };
-        }),
-      };
-    });
-  }, []);
+    if (dataset) {
+      const nextHeaders = dataset.headers.map((h) => {
+        const isStd = REQUIRED_STANDARD_COLUMNS.some((std) =>
+          h.label.toUpperCase().includes(std.toUpperCase())
+        );
+        return { ...h, visible: isStd };
+      });
+      setDataset({ ...dataset, headers: nextHeaders });
+      syncHiddenColumnsFromHeaders(nextHeaders);
+    } else {
+      setHiddenColumnLabels([]);
+      saveHiddenColumnLabels([]);
+    }
+  }, [dataset, syncHiddenColumnsFromHeaders]);
+
+  // Colunas exibidas no ConfigPanel (reais quando carregado, ou as 9 padrões antes de colar)
+  const activePanelColumns: ColumnDefinition[] = useMemo(() => {
+    if (dataset) return dataset.headers;
+    const hiddenSet = new Set(hiddenColumnLabels.map((l) => l.toUpperCase()));
+    return REQUIRED_STANDARD_COLUMNS.map((label) => ({
+      key: label,
+      label,
+      visible: !hiddenSet.has(label.toUpperCase()),
+      isStandard: true,
+    }));
+  }, [dataset, hiddenColumnLabels]);
 
   const filteredRows = useMemo(() => {
     if (!dataset) return [];
@@ -174,7 +296,6 @@ export default function App() {
     });
   }, [dataset, config.filterStatus, config.searchQuery]);
 
-  // Classificação por Grupo e Natureza Predominante para o Quadro Resumo
   const classifications = useMemo(() => {
     if (!dataset) return [];
     return classifyFilteredRows(dataset.rows, filteredRows, dataset.headers, natureOverrides);
@@ -261,11 +382,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans">
-      <Header
-        onLoadSample={handleLoadSample}
-        onExportPortableHtml={handleExportPortableHtml}
-        hasData={Boolean(dataset)}
-      />
+      <Header onExportPortableHtml={handleExportPortableHtml} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Banner Inicial Direto */}
@@ -274,13 +391,13 @@ export default function App() {
             <div className="flex items-center gap-2 text-xs text-slate-300">
               <span className="font-mono font-semibold text-sky-400">4º BBM · Plantão Operacional</span>
               <span aria-hidden="true">·</span>
-              <span>Processamento 100% Client-Side</span>
+              <span>Configurações salvas automaticamente neste navegador</span>
             </div>
             <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white">
               Gerador de Relatório de Ocorrências em PDF
             </h1>
             <p className="text-xs text-slate-300 max-w-3xl">
-              Cole os dados copiados diretamente da página de ocorrências, selecione a Ala de Serviço (A, B, C ou D), defina a natureza predominante quando houver mais de uma, confira o Quadro Resumo na pré-visualização e baixe o relatório em PDF.
+              Cole os dados copiados da página de ocorrências, ajuste a Ala de Serviço (A, B, C ou D) e o intervalo de data/hora, confirme a natureza predominante quando necessário e baixe o PDF com o Quadro Resumo.
             </p>
           </div>
 
@@ -310,29 +427,29 @@ export default function App() {
         {/* 1. Colar Dados das Ocorrências */}
         <UploadSection
           onProcessInput={handleProcessInput}
+          onClearData={handleClearData}
           isProcessing={isProcessing}
           errorMessage={errorMessage}
           warningMessages={warningMessages}
           hasData={Boolean(dataset)}
         />
 
-        {/* 2. Contadores Rápidos */}
-        {dataset && <StatsCards dataset={dataset} filteredCount={filteredRows.length} />}
+        {/* 2. Parâmetros sempre disponíveis e persistidos no navegador */}
+        <ConfigPanel
+          config={config}
+          columns={activePanelColumns}
+          onChangeConfig={handleChangeConfig}
+          onToggleColumn={handleToggleColumn}
+          onToggleAllColumns={handleToggleAllColumns}
+          onResetColumnsToStandard={handleResetColumnsToStandard}
+          onOpenPdfPreview={handleOpenPdfPreview}
+          onDownloadPdf={handleDownloadPdf}
+          isGeneratingPdf={isGeneratingPdf}
+          hasData={Boolean(dataset)}
+        />
 
-        {/* 3. Parâmetros (Ala de Serviço, Data/Hora Inicial e Final, Logo Fixa, Colunas) */}
-        {dataset && (
-          <ConfigPanel
-            config={config}
-            columns={dataset.headers}
-            onChangeConfig={handleChangeConfig}
-            onToggleColumn={handleToggleColumn}
-            onToggleAllColumns={handleToggleAllColumns}
-            onResetColumnsToStandard={handleResetColumnsToStandard}
-            onOpenPdfPreview={handleOpenPdfPreview}
-            onDownloadPdf={handleDownloadPdf}
-            isGeneratingPdf={isGeneratingPdf}
-          />
-        )}
+        {/* 3. Contadores Rápidos */}
+        {dataset && <StatsCards dataset={dataset} filteredCount={filteredRows.length} />}
 
         {/* 4. Classificação & Natureza Predominante */}
         {dataset && (
@@ -420,7 +537,7 @@ export default function App() {
                 Sigilo Operacional e Hospedagem Estática (GitHub Pages)
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Todo o processamento ocorre exclusivamente no navegador do operador (arquitetura 100% client-side, sem backend). Os dados das ocorrências nunca são enviados a servidores externos, permitindo hospedagem gratuita e direta no GitHub Pages sem necessidade de Vercel.
+                Todo o processamento ocorre exclusivamente no navegador do operador (arquitetura 100% client-side, sem backend). Os dados das ocorrências nunca são enviados a servidores externos, e apenas as preferências de cabeçalho/colunas ficam armazenadas localmente no seu navegador.
               </p>
             </div>
           </div>

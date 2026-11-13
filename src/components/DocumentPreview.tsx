@@ -269,30 +269,45 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {summary.byNature.map((n, idx) => (
-                        <tr
-                          key={n.id}
-                          className={`border-t border-slate-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}
-                        >
-                          <td className="py-1 px-2 border-r border-slate-200 font-semibold text-slate-700">
-                            {n.group}
-                          </td>
-                          <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-900">
-                            {n.code}
-                          </td>
-                          <td className="py-1 px-2 border-r border-slate-200 text-slate-600">
-                            {n.subGroup}
-                          </td>
-                          <td className="py-1 px-2 border-r border-slate-200 text-slate-900">
-                            {n.nature}
-                          </td>
-                          <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-900">
-                            {n.count}
-                          </td>
-                          <td className="py-1 px-2 text-center font-mono text-slate-600">
-                            {formatPct(n.percentage)}
-                          </td>
-                        </tr>
+                      {summary.bySubGroup.map((block) => (
+                        <React.Fragment key={`${block.group}__${block.subGroup}`}>
+                          {block.items.map((n, idx) => (
+                            <tr
+                              key={n.id}
+                              className={`border-t border-slate-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}
+                            >
+                              <td className="py-1 px-2 border-r border-slate-200 font-semibold text-slate-700">
+                                {n.group}
+                              </td>
+                              <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-900">
+                                {n.code}
+                              </td>
+                              <td className="py-1 px-2 border-r border-slate-200 text-slate-700 font-medium">
+                                {n.subGroup}
+                              </td>
+                              <td className="py-1 px-2 border-r border-slate-200 text-slate-900">
+                                {n.nature}
+                              </td>
+                              <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-900">
+                                {n.count}
+                              </td>
+                              <td className="py-1 px-2 text-center font-mono text-slate-600">
+                                {formatPct(n.percentage)}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t border-slate-300 bg-slate-100 font-bold text-slate-900">
+                            <td colSpan={4} className="py-1 px-2 border-r border-slate-200 text-right text-[9.5px] uppercase tracking-tight">
+                              Subtotal — {block.group} / {block.subGroup}
+                            </td>
+                            <td className="py-1 px-2 border-r border-slate-200 text-center font-mono">
+                              {block.subtotalCount}
+                            </td>
+                            <td className="py-1 px-2 text-center font-mono">
+                              {formatPct(block.subtotalPercentage)}
+                            </td>
+                          </tr>
+                        </React.Fragment>
                       ))}
                       <tr className="border-t-2 border-slate-900 bg-slate-200 font-bold text-slate-900">
                         <td colSpan={4} className="py-1.5 px-2 border-r border-slate-300">

@@ -21,6 +21,7 @@ interface ConfigPanelProps {
   onOpenPdfPreview: () => void;
   onDownloadPdf: () => void;
   isGeneratingPdf: boolean;
+  hasData: boolean;
 }
 
 const SERVICE_WINGS: ServiceWing[] = ['A', 'B', 'C', 'D'];
@@ -35,8 +36,10 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onOpenPdfPreview,
   onDownloadPdf,
   isGeneratingPdf,
+  hasData,
 }) => {
   const visibleColumnsCount = columns.filter((c) => c.visible).length;
+  const isPdfDisabled = !hasData || isGeneratingPdf || visibleColumnsCount === 0;
 
   return (
     <div id="configuracao" className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-xs space-y-6">
@@ -57,35 +60,44 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
 
         {/* Botões Principais de Ação */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onOpenPdfPreview}
-            disabled={isGeneratingPdf || visibleColumnsCount === 0}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer whitespace-nowrap"
-          >
-            <Eye className="w-3.5 h-3.5 text-slate-600" />
-            <span>Abrir PDF</span>
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
+          {!hasData && (
+            <span className="text-[11px] text-amber-700 font-medium sm:mr-1">
+              Cole os dados acima para gerar o PDF
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenPdfPreview}
+              disabled={isPdfDisabled}
+              title={!hasData ? 'Cole e processe os dados das ocorrências primeiro' : undefined}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Eye className="w-3.5 h-3.5 text-slate-600" />
+              <span>Abrir PDF</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={onDownloadPdf}
-            disabled={isGeneratingPdf || visibleColumnsCount === 0}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-xs transition-colors cursor-pointer whitespace-nowrap"
-          >
-            {isGeneratingPdf ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Gerando...</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-3.5 h-3.5 text-sky-300" />
-                <span>Baixar PDF</span>
-              </>
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={onDownloadPdf}
+              disabled={isPdfDisabled}
+              title={!hasData ? 'Cole e processe os dados das ocorrências primeiro' : undefined}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Gerando...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5 text-sky-300" />
+                  <span>Baixar PDF</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -315,7 +327,9 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
               Colunas do Relatório ({visibleColumnsCount} de {columns.length} ativas)
             </span>
             <p className="text-[11px] text-slate-500">
-              Selecione exatamente quais colunas devem compor o documento PDF.
+              {hasData
+                ? 'Selecione exatamente quais colunas devem compor o documento PDF (salvo automaticamente).'
+                : 'Preferência de colunas padrão salva automaticamente para a próxima tabela colada.'}
             </p>
           </div>
 

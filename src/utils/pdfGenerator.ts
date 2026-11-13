@@ -127,15 +127,34 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
     ],
   ];
 
-  summary.byNature.forEach((n, idx) => {
-    const fill = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+  summary.bySubGroup.forEach((block) => {
+    block.items.forEach((n, idx) => {
+      const fill = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      natureBody.push([
+        { text: n.group, style: 'tableCell', fillColor: fill, color: '#334155', bold: true },
+        { text: n.code, style: 'tableCell', fillColor: fill, alignment: 'center', color: '#0F172A', bold: true },
+        { text: n.subGroup, style: 'tableCell', fillColor: fill, color: '#334155' },
+        { text: n.nature, style: 'tableCell', fillColor: fill, color: '#0F172A' },
+        { text: String(n.count), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
+        { text: pct(n.percentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
+      ]);
+    });
+
     natureBody.push([
-      { text: n.group, style: 'tableCell', fillColor: fill, color: '#334155', bold: true },
-      { text: n.code, style: 'tableCell', fillColor: fill, alignment: 'center', color: '#0F172A', bold: true },
-      { text: n.subGroup, style: 'tableCell', fillColor: fill, color: '#475569' },
-      { text: n.nature, style: 'tableCell', fillColor: fill, color: '#0F172A' },
-      { text: String(n.count), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
-      { text: pct(n.percentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
+      {
+        text: `Subtotal — ${block.group} / ${block.subGroup}`,
+        colSpan: 4,
+        style: 'tableCell',
+        fillColor: '#F1F5F9',
+        bold: true,
+        alignment: 'right',
+        color: '#0F172A',
+      },
+      {},
+      {},
+      {},
+      { text: String(block.subtotalCount), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
+      { text: pct(block.subtotalPercentage), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
     ]);
   });
 

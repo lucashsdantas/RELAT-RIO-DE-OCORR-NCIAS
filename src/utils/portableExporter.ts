@@ -3,8 +3,8 @@ import { NATURE_CATALOG } from './natureCatalog';
 
 /**
  * Gera e realiza o download da aplicação completa em um único arquivo HTML autônomo (index.html).
- * Inclui o catálogo completo de 452 naturezas, seletor de natureza predominante e Quadro Resumo no PDF.
- * Pode ser publicado diretamente no GitHub Pages (sem Vercel/Node.js) ou aberto offline no navegador.
+ * Inclui o catálogo completo de 452 naturezas, persistência local de parâmetros, bloqueio de edição pós-colagem,
+ * seletor de natureza predominante e Quadro Resumo agrupado por Sub-grupo com subtotais no PDF.
  */
 export function exportStandaloneSingleFileHtml(): void {
   const serializedCatalog = JSON.stringify(NATURE_CATALOG);
@@ -32,9 +32,7 @@ export function exportStandaloneSingleFileHtml(): void {
         <img src="${FIXED_LOGO_URL}" referrerpolicy="no-referrer" alt="Brasão" class="w-8 h-8 object-contain">
         <span class="text-base font-bold tracking-tight text-slate-900">Relatórios de Ocorrências — 4º BBM</span>
       </div>
-      <button id="btnLoadSample" class="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer">
-        Carregar Exemplo
-      </button>
+      <span class="text-xs text-slate-500 hidden sm:inline">Configurações salvas automaticamente neste navegador</span>
     </div>
   </header>
 
@@ -46,11 +44,15 @@ export function exportStandaloneSingleFileHtml(): void {
           <h2 class="text-base font-bold text-slate-900">1. Cole os Dados das Ocorrências</h2>
           <p class="text-xs text-slate-500">Copie a tabela na página do sistema (Ctrl+C) e cole diretamente no campo abaixo (Ctrl+V).</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <input type="file" id="fileInput" accept=".html,.htm,.txt,.csv,.tsv" class="hidden">
-          <button id="btnImportFile" class="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg cursor-pointer">Importar Arquivo</button>
-          <button id="btnClear" class="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 rounded-lg cursor-pointer">Limpar</button>
+          <button id="btnImportFile" class="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg cursor-pointer">Importar Arquivo</button>
+          <button id="btnClear" class="px-4 py-2 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-300 hover:bg-rose-100 rounded-lg shadow-xs cursor-pointer transition-colors">Limpar Dados</button>
         </div>
+      </div>
+
+      <div id="lockBanner" class="hidden p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-900">
+        <span><strong>Dados carregados e bloqueados contra edição.</strong> Caso precise alterar algum registro, clique em <strong>Limpar Dados</strong> e cole a tabela novamente.</span>
       </div>
 
       <textarea id="txtInput" rows="6" placeholder="Cole aqui os dados copiados (tabela da web, Excel, CSV ou código HTML)..." class="w-full text-xs font-mono p-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900"></textarea>
@@ -63,19 +65,20 @@ export function exportStandaloneSingleFileHtml(): void {
       <div id="alertBox" class="hidden p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700"></div>
     </section>
 
-    <!-- 2. Parâmetros do Relatório -->
-    <section id="configSection" class="hidden bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+    <!-- 2. Parâmetros do Relatório (sempre visível e salvo automaticamente) -->
+    <section id="configSection" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
         <div class="flex items-center gap-3">
           <img src="${FIXED_LOGO_URL}" referrerpolicy="no-referrer" alt="Brasão" class="w-10 h-10 object-contain border border-slate-200 rounded p-0.5">
           <div>
             <h3 class="text-sm font-bold text-slate-900">2. Parâmetros e Personalização do Relatório</h3>
-            <p class="text-[11px] text-slate-500">Ala de Serviço, intervalo de data/hora e colunas do PDF</p>
+            <p class="text-[11px] text-slate-500">Ala de Serviço, intervalo de data/hora e colunas do PDF (salvos automaticamente)</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <button id="btnViewPdf" class="px-3.5 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer">Abrir PDF</button>
-          <button id="btnDownloadPdf" class="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg cursor-pointer">Baixar PDF</button>
+        <div class="flex flex-wrap items-center gap-2">
+          <span id="pdfHint" class="text-[11px] text-amber-700 font-medium">Cole os dados acima para gerar o PDF</span>
+          <button id="btnViewPdf" disabled class="px-3.5 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg cursor-pointer">Abrir PDF</button>
+          <button id="btnDownloadPdf" disabled class="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg cursor-pointer">Baixar PDF</button>
         </div>
       </div>
 
@@ -156,21 +159,146 @@ export function exportStandaloneSingleFileHtml(): void {
     const FIXED_LOGO_URL = '${FIXED_LOGO_URL}';
     const STD_COLS = ['NÚMERO','DATA REGISTRO','STATUS','DATA FATO','UNIDADES ATUAL','NATUREZAS','MUNICÍPIO','BAIRRO','LOGRADOURO'];
     const NATURE_CATALOG = ${serializedCatalog};
+    const STORAGE_CFG_KEY = 'relatorio_ocorrencias_portable_cfg_v1';
+    const STORAGE_HIDDEN_COLS_KEY = 'relatorio_ocorrencias_portable_hidden_cols_v1';
 
     let logoBase64 = null;
     let currentData = null;
     let visibleColumnsMap = {};
+    let hiddenLabels = [];
     let natureOverrides = {};
     let showAllClassifications = false;
 
-    (function initDates() {
+    const txtInput = document.getElementById('txtInput');
+    const btnProcess = document.getElementById('btnProcess');
+    const btnImportFile = document.getElementById('btnImportFile');
+    const btnClear = document.getElementById('btnClear');
+    const lockBanner = document.getElementById('lockBanner');
+    const btnViewPdf = document.getElementById('btnViewPdf');
+    const btnDownloadPdf = document.getElementById('btnDownloadPdf');
+    const pdfHint = document.getElementById('pdfHint');
+
+    function initAndLoadSettings() {
       const now = new Date();
       const yest = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const pad = n => String(n).padStart(2, '0');
       const fmt = (d, hr) => d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + hr;
+
       document.getElementById('cfgStart').value = fmt(yest, '07:00');
       document.getElementById('cfgEnd').value = fmt(now, '07:00');
-    })();
+
+      try {
+        const rawCfg = localStorage.getItem(STORAGE_CFG_KEY);
+        if (rawCfg) {
+          const parsed = JSON.parse(rawCfg);
+          if (parsed.wing) document.getElementById('cfgWing').value = parsed.wing;
+          if (parsed.start) document.getElementById('cfgStart').value = parsed.start;
+          if (parsed.end) document.getElementById('cfgEnd').value = parsed.end;
+          if (parsed.title !== undefined) document.getElementById('cfgTitle').value = parsed.title;
+          if (parsed.subtitle !== undefined) document.getElementById('cfgSubtitle').value = parsed.subtitle;
+          if (parsed.orientation) document.getElementById('cfgOrientation').value = parsed.orientation;
+        }
+        const rawCols = localStorage.getItem(STORAGE_HIDDEN_COLS_KEY);
+        if (rawCols) {
+          const parsedCols = JSON.parse(rawCols);
+          if (Array.isArray(parsedCols)) hiddenLabels = parsedCols;
+        }
+      } catch (e) {}
+    }
+
+    function saveSettings() {
+      try {
+        const payload = {
+          wing: document.getElementById('cfgWing').value,
+          start: document.getElementById('cfgStart').value,
+          end: document.getElementById('cfgEnd').value,
+          title: document.getElementById('cfgTitle').value,
+          subtitle: document.getElementById('cfgSubtitle').value,
+          orientation: document.getElementById('cfgOrientation').value
+        };
+        localStorage.setItem(STORAGE_CFG_KEY, JSON.stringify(payload));
+      } catch (e) {}
+    }
+
+    function saveHiddenLabels() {
+      try {
+        localStorage.setItem(STORAGE_HIDDEN_COLS_KEY, JSON.stringify(hiddenLabels));
+      } catch (e) {}
+    }
+
+    function renderColumnsControl() {
+      const colsDiv = document.getElementById('columnsList');
+      colsDiv.innerHTML = '';
+      const headers = currentData
+        ? currentData.headers
+        : STD_COLS.map(lbl => ({ key: lbl, label: lbl }));
+
+      headers.forEach(h => {
+        const isVisible = currentData
+          ? (visibleColumnsMap[h.key] !== undefined ? visibleColumnsMap[h.key] : !hiddenLabels.includes(h.label.toUpperCase()))
+          : !hiddenLabels.includes(h.label.toUpperCase());
+
+        if (currentData && visibleColumnsMap[h.key] === undefined) {
+          visibleColumnsMap[h.key] = isVisible;
+        }
+
+        const btn = document.createElement('button');
+        btn.className = 'px-2.5 py-1 text-xs rounded-lg border font-medium cursor-pointer ' + (isVisible ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-100 text-slate-400 border-slate-200 line-through');
+        btn.textContent = h.label;
+        btn.onclick = () => {
+          const upper = h.label.toUpperCase();
+          if (currentData) {
+            visibleColumnsMap[h.key] = !isVisible;
+            if (visibleColumnsMap[h.key]) {
+              hiddenLabels = hiddenLabels.filter(l => l !== upper);
+            } else if (!hiddenLabels.includes(upper)) {
+              hiddenLabels.push(upper);
+            }
+            saveHiddenLabels();
+            renderAll();
+          } else {
+            if (isVisible) {
+              if (!hiddenLabels.includes(upper)) hiddenLabels.push(upper);
+            } else {
+              hiddenLabels = hiddenLabels.filter(l => l !== upper);
+            }
+            saveHiddenLabels();
+            renderColumnsControl();
+          }
+        };
+        colsDiv.appendChild(btn);
+      });
+    }
+
+    function updateLockUI() {
+      const hasData = Boolean(currentData);
+      txtInput.readOnly = hasData;
+      if (hasData) {
+        txtInput.className = 'w-full text-xs font-mono p-3 bg-slate-100 text-slate-500 border border-slate-300 rounded-xl cursor-not-allowed select-none';
+        lockBanner.classList.remove('hidden');
+        btnProcess.classList.add('hidden');
+        btnImportFile.disabled = true;
+        btnImportFile.classList.add('opacity-50', 'cursor-not-allowed');
+        btnClear.className = 'px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm cursor-pointer transition-colors';
+        btnViewPdf.disabled = false;
+        btnDownloadPdf.disabled = false;
+        pdfHint.classList.add('hidden');
+      } else {
+        txtInput.className = 'w-full text-xs font-mono p-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900';
+        lockBanner.classList.add('hidden');
+        btnProcess.classList.remove('hidden');
+        btnImportFile.disabled = false;
+        btnImportFile.classList.remove('opacity-50', 'cursor-not-allowed');
+        btnClear.className = 'px-4 py-2 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-300 hover:bg-rose-100 rounded-lg shadow-xs cursor-pointer transition-colors';
+        btnViewPdf.disabled = true;
+        btnDownloadPdf.disabled = true;
+        pdfHint.classList.remove('hidden');
+      }
+    }
+
+    initAndLoadSettings();
+    renderColumnsControl();
+    updateLockUI();
 
     fetch(FIXED_LOGO_URL, { mode: 'cors' })
       .then(r => r.blob())
@@ -295,7 +423,38 @@ export function exportStandaloneSingleFileHtml(): void {
       const byNature = Array.from(natMap.values()).map(n => ({ ...n, pct: total ? (n.count/total*100) : 0 }))
         .sort((a, b) => (grpOrd.get(a.group) - grpOrd.get(b.group)) || (b.count - a.count) || a.code.localeCompare(b.code));
 
-      return { items, summary: { total, byGroup, byNature, multiPending, unclass } };
+      // Agrupamento por Sub-grupo com subtotais
+      const subMap = new Map();
+      byNature.forEach(entry => {
+        const key = entry.group + '||' + entry.subGroup;
+        const existing = subMap.get(key);
+        if (existing) {
+          existing.entries.push(entry);
+          existing.subtotalCount += entry.count;
+        } else {
+          subMap.set(key, {
+            group: entry.group,
+            subGroup: entry.subGroup,
+            entries: [entry],
+            subtotalCount: entry.count,
+            subtotalPct: 0
+          });
+        }
+      });
+
+      const bySubGroup = Array.from(subMap.values()).map(blk => ({
+        ...blk,
+        subtotalPct: total ? (blk.subtotalCount / total * 100) : 0,
+        entries: blk.entries.sort((a, b) => (b.count - a.count) || a.code.localeCompare(b.code))
+      })).sort((a, b) => {
+        const ga = grpOrd.get(a.group) ?? 999;
+        const gb = grpOrd.get(b.group) ?? 999;
+        if (ga !== gb) return ga - gb;
+        if (b.subtotalCount !== a.subtotalCount) return b.subtotalCount - a.subtotalCount;
+        return a.subGroup.localeCompare(b.subGroup, 'pt-BR');
+      });
+
+      return { items, summary: { total, byGroup, byNature, bySubGroup, multiPending, unclass } };
     }
 
     function fmtBrDate(iso) {
@@ -354,25 +513,26 @@ export function exportStandaloneSingleFileHtml(): void {
       return dataRows.length ? { headers, rows: dataRows } : null;
     }
 
+    function applyParsedData(parsed) {
+      currentData = parsed;
+      visibleColumnsMap = {};
+      parsed.headers.forEach(h => {
+        visibleColumnsMap[h.key] = !hiddenLabels.includes(h.label.toUpperCase());
+      });
+      natureOverrides = {};
+      document.getElementById('alertBox').classList.add('hidden');
+      updateLockUI();
+      renderAll();
+    }
+
     function renderAll() {
+      renderColumnsControl();
       if (!currentData) return;
-      document.getElementById('configSection').classList.remove('hidden');
+
       document.getElementById('classificationSection').classList.remove('hidden');
       document.getElementById('previewSection').classList.remove('hidden');
 
       const { items, summary } = computeClassificationAndSummary();
-
-      // Columns
-      const colsDiv = document.getElementById('columnsList');
-      colsDiv.innerHTML = '';
-      currentData.headers.forEach(h => {
-        if (visibleColumnsMap[h.key] === undefined) visibleColumnsMap[h.key] = true;
-        const btn = document.createElement('button');
-        btn.className = 'px-2.5 py-1 text-xs rounded-lg border font-medium cursor-pointer ' + (visibleColumnsMap[h.key] ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-100 text-slate-400 border-slate-200 line-through');
-        btn.textContent = h.label;
-        btn.onclick = () => { visibleColumnsMap[h.key] = !visibleColumnsMap[h.key]; renderAll(); };
-        colsDiv.appendChild(btn);
-      });
 
       // Classification panel
       const attention = items.filter(it => it.hasMultiple || it.isUnclassified || it.isManual);
@@ -458,7 +618,7 @@ export function exportStandaloneSingleFileHtml(): void {
       html += '</tbody>';
       document.getElementById('previewTable').innerHTML = html;
 
-      // Summary Preview
+      // Summary Preview (por Grupo + por Sub-grupo com subtotais)
       const pctStr = v => v.toFixed(1).replace('.', ',') + '%';
       let sumHtml = '<div><h5 class="text-xs font-extrabold text-slate-900 uppercase">Quadro Resumo — Quantitativo de Ocorrências Atendidas</h5><p class="text-[10px] text-slate-600">Total de Ocorrências: ' + summary.total + ' | Total de Naturezas: ' + summary.total + '</p></div>';
       sumHtml += '<table class="max-w-lg w-full text-left text-[10px] border-collapse border border-slate-300"><thead class="bg-slate-900 text-white"><tr><th class="p-1.5 border border-slate-700">GRUPO</th><th class="p-1.5 border border-slate-700 text-center">OCORRÊNCIAS</th><th class="p-1.5 border border-slate-700 text-center">%</th></tr></thead><tbody>';
@@ -468,14 +628,17 @@ export function exportStandaloneSingleFileHtml(): void {
       sumHtml += '<tr class="bg-slate-200 font-bold"><td class="p-1.5 border border-slate-300">TOTAL GERAL POR GRUPO</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.total + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">100,0%</td></tr></tbody></table>';
 
       sumHtml += '<table class="w-full text-left text-[10px] border-collapse border border-slate-300"><thead class="bg-slate-900 text-white"><tr><th class="p-1.5 border border-slate-700">GRUPO</th><th class="p-1.5 border border-slate-700 text-center">CÓDIGO</th><th class="p-1.5 border border-slate-700">SUB-GRUPO</th><th class="p-1.5 border border-slate-700">NATUREZA</th><th class="p-1.5 border border-slate-700 text-center">QTD.</th><th class="p-1.5 border border-slate-700 text-center">%</th></tr></thead><tbody>';
-      summary.byNature.forEach((n, i) => {
-        sumHtml += '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + '"><td class="p-1 border border-slate-200 font-semibold">' + n.group + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + n.code + '</td><td class="p-1 border border-slate-200">' + n.subGroup + '</td><td class="p-1 border border-slate-200">' + n.nature + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + n.count + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + pctStr(n.pct) + '</td></tr>';
+      summary.bySubGroup.forEach(blk => {
+        blk.entries.forEach((n, i) => {
+          sumHtml += '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + '"><td class="p-1 border border-slate-200 font-semibold">' + n.group + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + n.code + '</td><td class="p-1 border border-slate-200">' + n.subGroup + '</td><td class="p-1 border border-slate-200">' + n.nature + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + n.count + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + pctStr(n.pct) + '</td></tr>';
+        });
+        sumHtml += '<tr class="bg-slate-100 font-bold text-slate-900"><td colspan="4" class="p-1 border border-slate-300 text-right">Subtotal — ' + blk.group + ' / ' + blk.subGroup + '</td><td class="p-1 border border-slate-300 text-center font-mono">' + blk.subtotalCount + '</td><td class="p-1 border border-slate-300 text-center font-mono">' + pctStr(blk.subtotalPct) + '</td></tr>';
       });
       sumHtml += '<tr class="bg-slate-200 font-bold"><td colspan="4" class="p-1.5 border border-slate-300">TOTAL GERAL DE NATUREZAS ATENDIDAS</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.total + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">100,0%</td></tr></tbody></table>';
 
       document.getElementById('summaryPreview').innerHTML = sumHtml;
       document.getElementById('docFooterPreview').innerHTML = '<span>DOCUMENTO DE USO CORPORATIVO / RESERVADO</span><span>Página 1</span>';
-      document.getElementById('rowCountLabel').textContent = summary.total + ' ocorrências · ' + summary.byGroup.length + ' grupo(s)';
+      document.getElementById('rowCountLabel').textContent = summary.total + ' ocorrências · ' + summary.bySubGroup.length + ' subgrupo(s)';
     }
 
     function createPdfDoc() {
@@ -522,15 +685,23 @@ export function exportStandaloneSingleFileHtml(): void {
         { text: 'QTD.', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
         { text: '%', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' }
       ]];
-      summary.byNature.forEach((n, i) => {
-        const f = i % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      summary.bySubGroup.forEach(blk => {
+        blk.entries.forEach((n, i) => {
+          const f = i % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+          natureBody.push([
+            { text: n.group, fillColor: f, bold: true, fontSize: 6.5 },
+            { text: n.code, fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
+            { text: n.subGroup, fillColor: f, fontSize: 6.5 },
+            { text: n.nature, fillColor: f, fontSize: 6.5 },
+            { text: String(n.count), fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
+            { text: pctStr(n.pct), fillColor: f, alignment: 'center', fontSize: 6.5 }
+          ]);
+        });
         natureBody.push([
-          { text: n.group, fillColor: f, bold: true, fontSize: 6.5 },
-          { text: n.code, fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
-          { text: n.subGroup, fillColor: f, fontSize: 6.5 },
-          { text: n.nature, fillColor: f, fontSize: 6.5 },
-          { text: String(n.count), fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
-          { text: pctStr(n.pct), fillColor: f, alignment: 'center', fontSize: 6.5 }
+          { text: 'Subtotal — ' + blk.group + ' / ' + blk.subGroup, colSpan: 4, fillColor: '#F1F5F9', bold: true, alignment: 'right', fontSize: 6.5, color: '#0F172A' },
+          {}, {}, {},
+          { text: String(blk.subtotalCount), fillColor: '#F1F5F9', bold: true, alignment: 'center', fontSize: 6.5, color: '#0F172A' },
+          { text: pctStr(blk.subtotalPct), fillColor: '#F1F5F9', bold: true, alignment: 'center', fontSize: 6.5, color: '#0F172A' }
         ]);
       });
       natureBody.push([
@@ -604,8 +775,9 @@ export function exportStandaloneSingleFileHtml(): void {
     }
 
     ['cfgWing','cfgStart','cfgEnd','cfgTitle','cfgSubtitle','cfgOrientation'].forEach(id => {
-      document.getElementById(id).addEventListener('change', renderAll);
-      document.getElementById(id).addEventListener('input', renderAll);
+      const handler = () => { saveSettings(); renderAll(); };
+      document.getElementById(id).addEventListener('change', handler);
+      document.getElementById(id).addEventListener('input', handler);
     });
 
     document.getElementById('btnToggleAllClass').onclick = () => {
@@ -614,44 +786,69 @@ export function exportStandaloneSingleFileHtml(): void {
       renderAll();
     };
 
-    const txtInput = document.getElementById('txtInput');
     txtInput.addEventListener('paste', (e) => {
+      if (currentData) { e.preventDefault(); return; }
       const plain = e.clipboardData.getData('text/plain');
       const html = e.clipboardData.getData('text/html');
       if (plain || html) {
         e.preventDefault();
         txtInput.value = plain || html;
         const parsed = parseInput(txtInput.value, html);
-        if (parsed) { currentData = parsed; visibleColumnsMap = {}; natureOverrides = {}; document.getElementById('alertBox').classList.add('hidden'); renderAll(); }
+        if (parsed) {
+          applyParsedData(parsed);
+        } else {
+          document.getElementById('alertBox').textContent = 'Não foi possível identificar uma tabela nos dados colados.';
+          document.getElementById('alertBox').classList.remove('hidden');
+        }
       }
     });
 
-    document.getElementById('btnProcess').onclick = () => {
+    btnProcess.onclick = () => {
+      if (currentData) return;
       const parsed = parseInput(txtInput.value);
-      if (parsed) { currentData = parsed; visibleColumnsMap = {}; natureOverrides = {}; document.getElementById('alertBox').classList.add('hidden'); renderAll(); }
-      else { document.getElementById('alertBox').textContent = 'Não foi possível identificar uma tabela nos dados colados.'; document.getElementById('alertBox').classList.remove('hidden'); }
+      if (parsed) {
+        applyParsedData(parsed);
+      } else {
+        document.getElementById('alertBox').textContent = 'Não foi possível identificar uma tabela nos dados colados.';
+        document.getElementById('alertBox').classList.remove('hidden');
+      }
     };
 
-    document.getElementById('btnImportFile').onclick = () => document.getElementById('fileInput').click();
+    btnImportFile.onclick = () => {
+      if (!currentData) document.getElementById('fileInput').click();
+    };
+
     document.getElementById('fileInput').onchange = (e) => {
+      if (currentData) return;
       const f = e.target.files[0]; if (!f) return;
       const r = new FileReader();
-      r.onload = ev => { txtInput.value = ev.target.result; const parsed = parseInput(ev.target.result); if (parsed) { currentData = parsed; visibleColumnsMap = {}; natureOverrides = {}; renderAll(); } };
+      r.onload = ev => {
+        txtInput.value = ev.target.result;
+        const parsed = parseInput(ev.target.result);
+        if (parsed) applyParsedData(parsed);
+        else {
+          document.getElementById('alertBox').textContent = 'Não foi possível identificar uma tabela no arquivo importado.';
+          document.getElementById('alertBox').classList.remove('hidden');
+        }
+      };
       r.readAsText(f);
-    };
-    document.getElementById('btnClear').onclick = () => { txtInput.value = ''; };
-    document.getElementById('btnLoadSample').onclick = () => {
-      const sample = STD_COLS.join('\\t') + '\\n' +
-        '2026-08912\\t13/11/2026 06:42\\tConcluído\\t13/11/2026 06:15\\t1º Pelotão / ABT-14\\t61201 - TERRENO BALDIO, LOTE VAGO OU SIMILAR\\tPatos de Minas\\tCentro\\tRua Major Gote, 840\\n' +
-        '2026-08911\\t13/11/2026 05:50\\tEm Andamento\\t13/11/2026 05:32\\tUR-08 / Resgate\\t30113 - QUEDA DE MOTO; 30406 - HEMORRAGIA\\tPatos de Minas\\tSobradinho\\tAv. Fátima Porto, 1420';
-      txtInput.value = sample;
-      currentData = parseInput(sample);
-      visibleColumnsMap = {}; natureOverrides = {};
-      renderAll();
+      e.target.value = '';
     };
 
-    document.getElementById('btnViewPdf').onclick = () => { if (currentData) pdfMake.createPdf(createPdfDoc()).open(); };
-    document.getElementById('btnDownloadPdf').onclick = () => { if (currentData) pdfMake.createPdf(createPdfDoc()).download('relatorio_ocorrencias_ala_' + document.getElementById('cfgWing').value.toLowerCase() + '.pdf'); };
+    btnClear.onclick = () => {
+      txtInput.value = '';
+      currentData = null;
+      visibleColumnsMap = {};
+      natureOverrides = {};
+      document.getElementById('alertBox').classList.add('hidden');
+      document.getElementById('classificationSection').classList.add('hidden');
+      document.getElementById('previewSection').classList.add('hidden');
+      updateLockUI();
+      renderColumnsControl();
+    };
+
+    btnViewPdf.onclick = () => { if (currentData) pdfMake.createPdf(createPdfDoc()).open(); };
+    btnDownloadPdf.onclick = () => { if (currentData) pdfMake.createPdf(createPdfDoc()).download('relatorio_ocorrencias_ala_' + document.getElementById('cfgWing').value.toLowerCase() + '.pdf'); };
   </script>
 </body>
 </html>`;
