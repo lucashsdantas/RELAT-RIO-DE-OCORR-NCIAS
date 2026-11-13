@@ -1,0 +1,541 @@
+import { OccurrenceDataset, ReportConfig } from '../types/occurrence';
+import { OccurrenceSummaryReport } from './natureCatalog';
+
+declare global {
+  interface Window {
+    pdfMake?: {
+      createPdf: (docDefinition: any) => {
+        open: () => void;
+        download: (defaultFileName?: string) => void;
+        print: () => void;
+        getBlob: (cb: (blob: Blob) => void) => void;
+        getDataUrl: (cb: (dataUrl: string) => void) => void;
+      };
+      vfs?: any;
+    };
+  }
+}
+
+/**
+ * Formata data e hora atual no padrão brasileiro (DD/MM/AAAA às HH:mm:ss)
+ */
+export function formatCurrentDateTime(date: Date = new Date()): string {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const y = date.getFullYear();
+  const hr = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  const sec = String(date.getSeconds()).padStart(2, '0');
+  return `${d}/${m}/${y} às ${hr}:${min}:${sec}`;
+}
+
+/**
+ * Formata string de input datetime-local (YYYY-MM-DDTHH:mm) para DD/MM/AAAA HH:mm
+ */
+export function formatBrazilianDateTime(isoLocal: string): string {
+  if (!isoLocal) return 'Não informado';
+  const [datePart, timePart] = isoLocal.split('T');
+  if (!datePart) return isoLocal;
+  const [y, m, d] = datePart.split('-');
+  if (!y || !m || !d) return isoLocal;
+  const timeStr = timePart ? timePart.slice(0, 5) : '00:00';
+  return `${d}/${m}/${y} ${timeStr}`;
+}
+
+/**
+ * Gera o nome de arquivo padrão para download do relatório
+ */
+export function generatePdfFileName(title: string, wing?: string): string {
+  const now = new Date();
+  const d = String(now.getDate()).padStart(2, '0');
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const y = now.getFullYear();
+  const hr = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+
+  const sanitizedTitle = title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 28);
+
+  const wingPart = wing ? `_ala_${wing.toLowerCase()}` : '';
+
+  return `${sanitizedTitle || 'relatorio_ocorrencias'}${wingPart}_${y}${m}${d}_${hr}${min}.pdf`;
+}
+
+/**
+ * Calcula larguras proporcionais para cada coluna da tabela em pdfmake
+ */
+function calculateColumnWidths(
+  visibleColumns: { key: string; label: string }[],
+  orientation: 'landscape' | 'portrait'
+) {
+  return visibleColumns.map((col) => {
+    const label = col.label.toUpperCase();
+    if (label.includes('NÚMERO') || label.includes('NUMERO')) return orientation === 'landscape' ? 62 : 52;
+    if (label.includes('REGISTRO')) return orientation === 'landscape' ? 58 : 48;
+    if (label.includes('STATUS')) return orientation === 'landscape' ? 52 : 44;
+    if (label.includes('FATO')) return orientation === 'landscape' ? 58 : 48;
+    if (label.includes('UNIDADE')) return orientation === 'landscape' ? 85 : 66;
+    if (label.includes('MUNICÍPIO') || label.includes('MUNICIPIO')) return orientation === 'landscape' ? 66 : 52;
+    if (label.includes('BAIRRO')) return orientation === 'landscape' ? 64 : 52;
+    if (label.includes('LOGRADOURO')) return orientation === 'landscape' ? 115 : '*';
+    if (label.includes('NATUREZA')) return '*';
+    return 'auto';
+  });
+}
+
+function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape: boolean) {
+  const pct = (val: number) => `${val.toFixed(1).replace('.', ',')}%`;
+
+  // Tabela 1: Quantitativo por Grupo
+  const groupBody: any[] = [
+    [
+      { text: 'GRUPO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
+      { text: 'OCORRÊNCIAS', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: '%', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+    ],
+  ];
+
+  summary.byGroup.forEach((g, idx) => {
+    const fill = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+    groupBody.push([
+      { text: g.group, style: 'tableCell', fillColor: fill, bold: true, color: '#0F172A' },
+      { text: String(g.count), style: 'tableCell', fillColor: fill, bold: true, alignment: 'center', color: '#0F172A' },
+      { text: pct(g.percentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
+    ]);
+  });
+
+  groupBody.push([
+    { text: 'TOTAL GERAL POR GRUPO', style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
+    { text: String(summary.totalOccurrences), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+    { text: summary.totalOccurrences > 0 ? '100,0%' : '0,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+  ]);
+
+  // Tabela 2: Quantitativo por Natureza
+  const natureBody: any[] = [
+    [
+      { text: 'GRUPO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
+      { text: 'CÓDIGO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: 'SUB-GRUPO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
+      { text: 'NATUREZA', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
+      { text: 'QTD.', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: '%', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+    ],
+  ];
+
+  summary.byNature.forEach((n, idx) => {
+    const fill = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+    natureBody.push([
+      { text: n.group, style: 'tableCell', fillColor: fill, color: '#334155', bold: true },
+      { text: n.code, style: 'tableCell', fillColor: fill, alignment: 'center', color: '#0F172A', bold: true },
+      { text: n.subGroup, style: 'tableCell', fillColor: fill, color: '#475569' },
+      { text: n.nature, style: 'tableCell', fillColor: fill, color: '#0F172A' },
+      { text: String(n.count), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
+      { text: pct(n.percentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
+    ]);
+  });
+
+  natureBody.push([
+    { text: 'TOTAL GERAL DE NATUREZAS ATENDIDAS', colSpan: 4, style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
+    {},
+    {},
+    {},
+    { text: String(summary.totalOccurrences), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+    { text: summary.totalOccurrences > 0 ? '100,0%' : '0,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+  ]);
+
+  const summaryTableLayout = {
+    hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length - 1 || i === node.table.body.length ? 0.9 : 0.5),
+    vLineWidth: () => 0.5,
+    hLineColor: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length ? '#0F172A' : '#CBD5E1'),
+    vLineColor: () => '#E2E8F0',
+    paddingLeft: () => 4,
+    paddingTop: () => 3,
+    paddingRight: () => 4,
+    paddingBottom: () => 3,
+  };
+
+  return [
+    {
+      margin: [0, 16, 0, 6],
+      unbreakable: true,
+      stack: [
+        {
+          text: 'QUADRO RESUMO — QUANTITATIVO DE OCORRÊNCIAS ATENDIDAS',
+          fontSize: 9.5,
+          bold: true,
+          color: '#0F172A',
+        },
+        {
+          text: `Consolidado por Grupo e por Natureza Predominante (Total de Ocorrências: ${summary.totalOccurrences} | Total de Naturezas: ${summary.totalOccurrences})`,
+          fontSize: 7,
+          color: '#475569',
+          margin: [0, 1, 0, 6],
+        },
+        {
+          table: {
+            headerRows: 1,
+            dontBreakRows: true,
+            widths: isLandscape ? [260, 80, 60] : ['*', 75, 50],
+            body: groupBody,
+          },
+          layout: summaryTableLayout,
+        },
+      ],
+    },
+    {
+      margin: [0, 8, 0, 0],
+      table: {
+        headerRows: 1,
+        dontBreakRows: true,
+        widths: isLandscape ? [125, 48, 115, '*', 42, 42] : [95, 42, 80, '*', 34, 34],
+        body: natureBody,
+      },
+      layout: summaryTableLayout,
+    },
+  ];
+}
+
+/**
+ * Constrói a definição de documento completa do pdfmake
+ */
+export function buildPdfDocDefinition(
+  dataset: OccurrenceDataset,
+  config: ReportConfig,
+  filteredRows: Record<string, string>[],
+  summary?: OccurrenceSummaryReport
+) {
+  const visibleColumns = dataset.headers.filter((h) => h.visible);
+  const emissionTimestamp = formatCurrentDateTime();
+  const totalCount = filteredRows.length;
+
+  const isLandscape = config.orientation === 'landscape';
+  const tableFontSize = config.compactMode ? 6.5 : isLandscape ? 7 : 6.5;
+  const headerFontSize = config.compactMode ? 7 : 7.5;
+  const cellPadding = config.compactMode ? [3, 2, 3, 2] : [3, 3.5, 3, 3.5];
+
+  const startFormatted = formatBrazilianDateTime(config.startDateTime);
+  const endFormatted = formatBrazilianDateTime(config.endDateTime);
+  const periodLabel = `Período: ${startFormatted} a ${endFormatted}`;
+  const wingLabel = `Ala de Serviço: Ala ${config.serviceWing}`;
+
+  const tableBody: any[] = [];
+
+  const headerCells = visibleColumns.map((col) => ({
+    text: col.label,
+    style: 'tableHeader',
+    fillColor: '#0F172A',
+    color: '#FFFFFF',
+    alignment:
+      col.label.includes('NÚMERO') || col.label.includes('STATUS') || col.label.includes('DATA')
+        ? 'center'
+        : 'left',
+  }));
+  tableBody.push(headerCells);
+
+  filteredRows.forEach((row, rowIndex) => {
+    const isEven = rowIndex % 2 === 0;
+    const rowFillColor = config.showZebra ? (isEven ? '#FFFFFF' : '#F8FAFC') : '#FFFFFF';
+
+    const rowCells = visibleColumns.map((col) => {
+      const val = row[col.key] || '—';
+      const labelUpper = col.label.toUpperCase();
+      const isStatusCol = labelUpper.includes('STATUS');
+      const isNumCol = labelUpper.includes('NÚMERO') || labelUpper.includes('NUMERO');
+      const isDateCol = labelUpper.includes('DATA');
+
+      let textColor = '#1E293B';
+      let isBold = false;
+
+      if (isStatusCol) {
+        isBold = true;
+        const normVal = val.toLowerCase();
+        if (normVal.includes('conclu') || normVal.includes('encerrad') || normVal.includes('finaliz')) {
+          textColor = '#15803d';
+        } else if (normVal.includes('andamento') || normVal.includes('atend')) {
+          textColor = '#b45309';
+        } else if (normVal.includes('pendente') || normVal.includes('abert')) {
+          textColor = '#b91c1c';
+        }
+      } else if (isNumCol) {
+        isBold = true;
+        textColor = '#0f172a';
+      }
+
+      return {
+        text: val,
+        style: 'tableCell',
+        fillColor: rowFillColor,
+        color: textColor,
+        bold: isBold,
+        alignment: isStatusCol || isNumCol || isDateCol ? 'center' : 'left',
+      };
+    });
+
+    tableBody.push(rowCells);
+  });
+
+  const columnWidths = calculateColumnWidths(visibleColumns, config.orientation);
+
+  const contentBlocks: any[] = [
+    {
+      table: {
+        headerRows: config.repeatHeader ? 1 : 0,
+        dontBreakRows: true,
+        widths: columnWidths,
+        body: tableBody,
+      },
+      layout: {
+        hLineWidth: function (i: number, node: any) {
+          return i === 0 || i === 1 || i === node.table.body.length ? 1 : 0.5;
+        },
+        vLineWidth: function () {
+          return 0.5;
+        },
+        hLineColor: function (i: number, node: any) {
+          if (i === 0 || i === 1) return '#0F172A';
+          if (i === node.table.body.length) return '#0F172A';
+          return '#E2E8F0';
+        },
+        vLineColor: function () {
+          return '#E2E8F0';
+        },
+        paddingLeft: function () {
+          return cellPadding[0];
+        },
+        paddingTop: function () {
+          return cellPadding[1];
+        },
+        paddingRight: function () {
+          return cellPadding[2];
+        },
+        paddingBottom: function () {
+          return cellPadding[3];
+        },
+      },
+    },
+  ];
+
+  if (summary && summary.totalOccurrences > 0) {
+    contentBlocks.push(...buildSummaryContentBlocks(summary, isLandscape));
+  }
+
+  const docDefinition: any = {
+    pageSize: 'A4',
+    pageOrientation: config.orientation,
+    pageMargins: isLandscape ? [24, 88, 24, 38] : [24, 94, 24, 38],
+
+    header: function (_currentPage: number, _pageCount: number, pageSize: any) {
+      const titleContent: any[] = [
+        {
+          text: config.title || 'RELATÓRIO OPERACIONAL DE ATENDIMENTOS E OCORRÊNCIAS',
+          fontSize: 10.5,
+          bold: true,
+          color: '#0F172A',
+          characterSpacing: 0.2,
+        },
+        {
+          text: config.subtitle || '4º Batalhão de Bombeiros Militar — Controle Operacional',
+          fontSize: 7.5,
+          color: '#475569',
+          margin: [0, 2, 0, 2],
+        },
+        {
+          text: [
+            { text: wingLabel, bold: true, color: '#0F172A' },
+            { text: '   |   ', color: '#94A3B8' },
+            { text: periodLabel, bold: true, color: '#0F172A' },
+            ...(config.department
+              ? [{ text: '   |   ', color: '#94A3B8' }, { text: config.department, color: '#475569' }]
+              : []),
+          ],
+          fontSize: 7,
+          margin: [0, 1, 0, 0],
+        },
+      ];
+
+      return {
+        margin: [24, 14, 24, 10],
+        stack: [
+          {
+            columns: [
+              {
+                width: '*',
+                columns: [
+                  ...(config.logoBase64
+                    ? [
+                        {
+                          image: config.logoBase64,
+                          fit: [46, 46],
+                          width: 46,
+                          margin: [0, 0, 10, 0],
+                        },
+                      ]
+                    : []),
+                  {
+                    width: '*',
+                    stack: titleContent,
+                  },
+                ],
+              },
+              {
+                width: isLandscape ? 210 : 165,
+                alignment: 'right',
+                stack: [
+                  {
+                    text: `ALA ${config.serviceWing}`,
+                    fontSize: 8.5,
+                    bold: true,
+                    color: '#0F172A',
+                  },
+                  {
+                    text: `Gerado em: ${emissionTimestamp}`,
+                    fontSize: 6.5,
+                    color: '#475569',
+                    margin: [0, 2, 0, 1],
+                  },
+                  {
+                    text: `Total de Ocorrências: ${totalCount}`,
+                    fontSize: 7,
+                    bold: true,
+                    color: '#0369A1',
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            canvas: [
+              {
+                type: 'line',
+                x1: 0,
+                y1: 8,
+                x2: pageSize.width - 48,
+                y2: 8,
+                lineWidth: 1,
+                lineColor: '#CBD5E1',
+              },
+              {
+                type: 'line',
+                x1: 0,
+                y1: 10,
+                x2: isLandscape ? 130 : 90,
+                y2: 10,
+                lineWidth: 2,
+                lineColor: '#0F172A',
+              },
+            ],
+          },
+        ],
+      };
+    },
+
+    footer: function (currentPage: number, pageCount: number, pageSize: any) {
+      return {
+        margin: [24, 10, 24, 10],
+        stack: [
+          {
+            canvas: [
+              {
+                type: 'line',
+                x1: 0,
+                y1: 0,
+                x2: pageSize.width - 48,
+                y2: 0,
+                lineWidth: 0.5,
+                lineColor: '#E2E8F0',
+              },
+            ],
+          },
+          {
+            margin: [0, 6, 0, 0],
+            columns: [
+              {
+                width: '*',
+                text:
+                  config.confidentialityText ||
+                  'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE',
+                fontSize: 6.5,
+                color: '#64748B',
+              },
+              {
+                width: 140,
+                alignment: 'right',
+                text: [
+                  { text: 'Página ', fontSize: 7, color: '#64748B' },
+                  { text: `${currentPage}`, fontSize: 7, bold: true, color: '#0F172A' },
+                  { text: ' de ', fontSize: 7, color: '#64748B' },
+                  { text: `${pageCount}`, fontSize: 7, bold: true, color: '#0F172A' },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+    },
+
+    content: contentBlocks,
+
+    styles: {
+      tableHeader: {
+        fontSize: headerFontSize,
+        bold: true,
+        margin: [1, 2, 1, 2],
+      },
+      tableCell: {
+        fontSize: tableFontSize,
+        margin: [0, 1, 0, 1],
+      },
+    },
+
+    defaultStyle: {
+      font: 'Roboto',
+    },
+  };
+
+  return docDefinition;
+}
+
+export function ensurePdfMake(): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean(window.pdfMake && window.pdfMake.createPdf);
+}
+
+export function createPdfInstance(
+  dataset: OccurrenceDataset,
+  config: ReportConfig,
+  filteredRows: Record<string, string>[],
+  summary?: OccurrenceSummaryReport
+) {
+  if (!ensurePdfMake()) {
+    throw new Error(
+      'A biblioteca pdfmake não foi carregada corretamente. Verifique sua conexão com a internet.'
+    );
+  }
+
+  const docDef = buildPdfDocDefinition(dataset, config, filteredRows, summary);
+  return window.pdfMake!.createPdf(docDef);
+}
+
+export function generatePdfBlobUrl(
+  dataset: OccurrenceDataset,
+  config: ReportConfig,
+  filteredRows: Record<string, string>[],
+  summary?: OccurrenceSummaryReport
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      const pdfInstance = createPdfInstance(dataset, config, filteredRows, summary);
+      pdfInstance.getBlob((blob: Blob) => {
+        const url = URL.createObjectURL(blob);
+        resolve(url);
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gerador de Relatório de Ocorrências em PDF</title>
+    <meta name="description" content="Ferramenta corporativa client-side para extração de tabelas HTML de ocorrências e geração de relatórios profissionais em PDF." />
+    <meta property="og:title" content="Gerador de Relatório de Ocorrências em PDF" />
+    <meta property="og:description" content="Ferramenta corporativa client-side para extração de tabelas HTML de ocorrências e geração de relatórios profissionais em PDF." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- pdfmake and vfs_fonts for client-side PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js"></script>
+  </head>
+  <body class="bg-slate-50 text-slate-900 antialiased font-sans min-h-screen selection:bg-slate-800 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
