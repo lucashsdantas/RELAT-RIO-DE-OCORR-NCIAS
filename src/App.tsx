@@ -17,7 +17,6 @@ import { classifyFilteredRows, buildOccurrenceSummary } from './utils/natureSumm
 import { exportStandaloneSingleFileHtml } from './utils/portableExporter';
 import { Header } from './components/Header';
 import { UploadSection } from './components/UploadSection';
-import { StatsCards } from './components/StatsCards';
 import { ConfigPanel } from './components/ConfigPanel';
 import { NatureClassificationPanel } from './components/NatureClassificationPanel';
 import { DataTable } from './components/DataTable';
@@ -448,10 +447,7 @@ export default function App() {
           hasData={Boolean(dataset)}
         />
 
-        {/* 3. Contadores Rápidos */}
-        {dataset && <StatsCards dataset={dataset} filteredCount={filteredRows.length} />}
-
-        {/* 4. Classificação & Natureza Predominante */}
+        {/* 3. Classificação & Natureza Predominante */}
         {dataset && (
           <NatureClassificationPanel
             allRows={dataset.rows}

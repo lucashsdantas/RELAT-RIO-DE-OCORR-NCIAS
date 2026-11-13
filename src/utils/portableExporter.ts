@@ -464,6 +464,26 @@ export function exportStandaloneSingleFileHtml(): void {
       return d + '/' + m + '/' + y + ' ' + (tp || '00:00').slice(0, 5);
     }
 
+    function splitDateAndTime(rawVal) {
+      const t = (rawVal || '').trim();
+      if (!t || t === '—') return null;
+      const m = t.match(/^(\\d{2,4}[\\/-]\\d{2}[\\/-]\\d{2,4})(?:\\s*(?:às|-|T)?\\s*(\\d{2}:\\d{2}(?::\\d{2})?))?/i);
+      if (m && m[1] && m[2]) {
+        let dStr = m[1];
+        if (/^\\d{4}-\\d{2}-\\d{2}$/.test(dStr)) {
+          const pts = dStr.split('-');
+          dStr = pts[2] + '/' + pts[1] + '/' + pts[0];
+        }
+        return { date: dStr, time: m[2] };
+      }
+      return null;
+    }
+
+    function isDateColLabel(lbl) {
+      const u = (lbl || '').toUpperCase();
+      return u.includes('DATA REGISTRO') || u.includes('DATA FATO') || u.includes('DATA');
+    }
+
     function parseInput(raw, clipHtml) {
       if (clipHtml && /<(table|tr)[\\s>]/i.test(clipHtml)) {
         const res = parseHtmlStr(clipHtml);
@@ -608,11 +628,30 @@ export function exportStandaloneSingleFileHtml(): void {
 
       const active = currentData.headers.filter(h => visibleColumnsMap[h.key]);
       let html = '<thead class="bg-slate-900 text-white"><tr>';
-      active.forEach(h => { html += '<th class="p-2 border border-slate-700">' + h.label + '</th>'; });
+      html += '<th class="p-2 border border-slate-700 text-center w-8">#</th>';
+      active.forEach(h => {
+        const u = h.label.toUpperCase();
+        const ctr = u.includes('NÚMERO') || u.includes('NUMERO') || u.includes('STATUS') || isDateColLabel(h.label);
+        html += '<th class="p-2 border border-slate-700 ' + (ctr ? 'text-center' : 'text-left') + '">' + h.label + '</th>';
+      });
       html += '</tr></thead><tbody>';
       currentData.rows.forEach((r, i) => {
         html += '<tr class="' + (i % 2 === 0 ? 'bg-white' : 'bg-slate-50') + '">';
-        active.forEach(h => { html += '<td class="p-1.5 border border-slate-200 text-slate-800">' + (r[h.key] || '—') + '</td>'; });
+        html += '<td class="p-1.5 border border-slate-200 text-center font-mono font-bold text-slate-600">' + (i + 1) + '</td>';
+        active.forEach(h => {
+          const val = r[h.key] || '—';
+          const u = h.label.toUpperCase();
+          const isNum = u.includes('NÚMERO') || u.includes('NUMERO');
+          const isSt = u.includes('STATUS');
+          const isDt = isDateColLabel(h.label);
+          const parts = isDt ? splitDateAndTime(val) : null;
+          const cls = 'p-1.5 border border-slate-200 text-slate-800' + (isNum ? ' font-mono font-bold text-center whitespace-nowrap' : '') + (isSt || isDt ? ' text-center' : '');
+          if (parts) {
+            html += '<td class="' + cls + '"><div class="flex flex-col items-center justify-center leading-tight font-mono whitespace-nowrap"><span class="text-slate-900">' + parts.date + '</span><span class="text-[9px] text-slate-500">' + parts.time + '</span></div></td>';
+          } else {
+            html += '<td class="' + cls + '">' + val + '</td>';
+          }
+        });
         html += '</tr>';
       });
       html += '</tbody>';
@@ -653,10 +692,53 @@ export function exportStandaloneSingleFileHtml(): void {
       const isL = orientation === 'landscape';
       const pctStr = v => v.toFixed(1).replace('.', ',') + '%';
 
-      const body = [active.map(h => ({ text: h.label, fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' }))];
+      const body = [[
+        { text: '#', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
+        ...active.map(h => ({ text: h.label, fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' }))
+      ]];
       currentData.rows.forEach((r, i) => {
-        body.push(active.map(h => ({ text: r[h.key] || '—', fillColor: i % 2 === 0 ? '#FFFFFF' : '#F8FAFC', fontSize: 6.5 })));
+        const bg = i % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+        body.push([
+          { text: String(i + 1), fillColor: bg, bold: true, color: '#475569', alignment: 'center', fontSize: 6.5 },
+          ...active.map(h => {
+            const val = r[h.key] || '—';
+            const u = h.label.toUpperCase();
+            const isNum = u.includes('NÚMERO') || u.includes('NUMERO');
+            const isSt = u.includes('STATUS');
+            const isDt = isDateColLabel(h.label);
+            if (isDt) {
+              const pts = splitDateAndTime(val);
+              if (pts) {
+                return {
+                  text: [{ text: pts.date + '\\n', color: '#0F172A' }, { text: pts.time, color: '#475569' }],
+                  fillColor: bg,
+                  alignment: 'center',
+                  fontSize: 6.5
+                };
+              }
+            }
+            return {
+              text: val,
+              fillColor: bg,
+              bold: isNum || isSt,
+              alignment: (isNum || isSt || isDt) ? 'center' : 'left',
+              fontSize: 6.5
+            };
+          })
+        ]);
       });
+
+      const mainWidths = [
+        isL ? 22 : 18,
+        ...active.map(h => {
+          const u = h.label.toUpperCase();
+          if (u.includes('NÚMERO') || u.includes('NUMERO')) return isL ? 60 : 50;
+          if (u.includes('REGISTRO') || u.includes('FATO')) return isL ? 54 : 44;
+          if (u.includes('STATUS')) return isL ? 50 : 42;
+          if (u.includes('NATUREZA')) return '*';
+          return 'auto';
+        })
+      ];
 
       const groupBody = [[
         { text: 'GRUPO', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7 },
@@ -756,7 +838,7 @@ export function exportStandaloneSingleFileHtml(): void {
           ]
         }),
         content: [
-          { table: { headerRows: 1, dontBreakRows: true, widths: active.map(() => '*'), body } },
+          { table: { headerRows: 1, dontBreakRows: true, widths: mainWidths, body } },
           {
             margin: [0, 16, 0, 6],
             unbreakable: true,

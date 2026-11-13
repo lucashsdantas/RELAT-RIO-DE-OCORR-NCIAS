@@ -3,7 +3,12 @@ import { Eye, Download, FileCheck2 } from 'lucide-react';
 import { OccurrenceDataset, ReportConfig } from '../types/occurrence';
 import { OccurrenceSummaryReport } from '../utils/natureCatalog';
 import { FIXED_LOGO_URL } from '../utils/sampleData';
-import { formatBrazilianDateTime, formatCurrentDateTime } from '../utils/pdfGenerator';
+import {
+  formatBrazilianDateTime,
+  formatCurrentDateTime,
+  isDateTimeColumn,
+  splitDateAndTime,
+} from '../utils/pdfGenerator';
 
 interface DocumentPreviewProps {
   dataset: OccurrenceDataset;
@@ -139,14 +144,27 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                 <table className="w-full text-left border-collapse text-[10px] leading-snug">
                   <thead>
                     <tr className="bg-slate-900 text-white">
-                      {visibleColumns.map((col) => (
-                        <th
-                          key={col.key}
-                          className="py-2 px-2 font-bold border-r border-slate-700 last:border-r-0 uppercase tracking-tight"
-                        >
-                          {col.label}
-                        </th>
-                      ))}
+                      <th className="py-2 px-2 font-bold border-r border-slate-700 text-center w-8 uppercase tracking-tight">
+                        #
+                      </th>
+                      {visibleColumns.map((col) => {
+                        const upper = col.label.toUpperCase();
+                        const centerHeader =
+                          upper.includes('NÚMERO') ||
+                          upper.includes('NUMERO') ||
+                          upper.includes('STATUS') ||
+                          isDateTimeColumn(col.label);
+                        return (
+                          <th
+                            key={col.key}
+                            className={`py-2 px-2 font-bold border-r border-slate-700 last:border-r-0 uppercase tracking-tight ${
+                              centerHeader ? 'text-center' : 'text-left'
+                            }`}
+                          >
+                            {col.label}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -159,11 +177,18 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                         : 'bg-white';
                       return (
                         <tr key={rIdx} className={`${bgClass} border-t border-slate-200`}>
+                          <td
+                            className={`${config.compactMode ? 'py-1 px-1.5' : 'py-1.5 px-2'} border-r border-slate-200 text-center font-mono font-bold text-slate-600`}
+                          >
+                            {rIdx + 1}
+                          </td>
                           {visibleColumns.map((col) => {
                             const val = row[col.key] || '—';
                             const upper = col.label.toUpperCase();
                             const isNum = upper.includes('NÚMERO') || upper.includes('NUMERO');
                             const isStatus = upper.includes('STATUS');
+                            const isDateCol = isDateTimeColumn(col.label);
+                            const dateParts = isDateCol ? splitDateAndTime(val) : null;
 
                             let textColor = 'text-slate-800';
                             if (isStatus) {
@@ -181,10 +206,17 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                               <td
                                 key={col.key}
                                 className={`${config.compactMode ? 'py-1 px-1.5' : 'py-1.5 px-2'} border-r border-slate-200 last:border-r-0 ${
-                                  isNum ? 'font-mono font-bold text-slate-900 whitespace-nowrap' : ''
-                                } ${textColor}`}
+                                  isNum ? 'font-mono font-bold text-slate-900 whitespace-nowrap text-center' : ''
+                                } ${isStatus || isDateCol ? 'text-center' : ''} ${textColor}`}
                               >
-                                {val}
+                                {dateParts ? (
+                                  <div className="flex flex-col items-center justify-center leading-tight font-mono whitespace-nowrap">
+                                    <span className="text-slate-900">{dateParts.date}</span>
+                                    <span className="text-[9px] text-slate-500">{dateParts.time}</span>
+                                  </div>
+                                ) : (
+                                  val
+                                )}
                               </td>
                             );
                           })}

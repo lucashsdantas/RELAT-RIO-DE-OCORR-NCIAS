@@ -43,6 +43,34 @@ export function formatBrazilianDateTime(isoLocal: string): string {
 }
 
 /**
+ * Separa uma célula de data/hora (ex: "13/11/2026 06:42") em data em cima e hora em baixo
+ */
+export function splitDateAndTime(rawValue: string): { date: string; time: string } | null {
+  const trimmed = (rawValue || '').trim();
+  if (!trimmed || trimmed === '—') return null;
+
+  const match = trimmed.match(
+    /^(\d{2,4}[\/-]\d{2}[\/-]\d{2,4})(?:\s*(?:às|-|T)?\s*(\d{2}:\d{2}(?::\d{2})?))?/i
+  );
+  if (match && match[1] && match[2]) {
+    let dateStr = match[1];
+    // Converte ISO YYYY-MM-DD para DD/MM/YYYY quando aplicável
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-');
+      dateStr = `${d}/${m}/${y}`;
+    }
+    return { date: dateStr, time: match[2] };
+  }
+
+  return null;
+}
+
+export function isDateTimeColumn(label: string): boolean {
+  const upper = label.toUpperCase();
+  return upper.includes('DATA REGISTRO') || upper.includes('DATA FATO') || upper.includes('DATA');
+}
+
+/**
  * Gera o nome de arquivo padrão para download do relatório
  */
 export function generatePdfFileName(title: string, wing?: string): string {
@@ -73,19 +101,21 @@ function calculateColumnWidths(
   visibleColumns: { key: string; label: string }[],
   orientation: 'landscape' | 'portrait'
 ) {
-  return visibleColumns.map((col) => {
+  const orderColWidth = orientation === 'landscape' ? 22 : 18;
+  const dataWidths = visibleColumns.map((col) => {
     const label = col.label.toUpperCase();
-    if (label.includes('NÚMERO') || label.includes('NUMERO')) return orientation === 'landscape' ? 62 : 52;
-    if (label.includes('REGISTRO')) return orientation === 'landscape' ? 58 : 48;
-    if (label.includes('STATUS')) return orientation === 'landscape' ? 52 : 44;
-    if (label.includes('FATO')) return orientation === 'landscape' ? 58 : 48;
-    if (label.includes('UNIDADE')) return orientation === 'landscape' ? 85 : 66;
-    if (label.includes('MUNICÍPIO') || label.includes('MUNICIPIO')) return orientation === 'landscape' ? 66 : 52;
-    if (label.includes('BAIRRO')) return orientation === 'landscape' ? 64 : 52;
-    if (label.includes('LOGRADOURO')) return orientation === 'landscape' ? 115 : '*';
+    if (label.includes('NÚMERO') || label.includes('NUMERO')) return orientation === 'landscape' ? 60 : 50;
+    if (label.includes('REGISTRO')) return orientation === 'landscape' ? 54 : 44;
+    if (label.includes('STATUS')) return orientation === 'landscape' ? 50 : 42;
+    if (label.includes('FATO')) return orientation === 'landscape' ? 54 : 44;
+    if (label.includes('UNIDADE')) return orientation === 'landscape' ? 84 : 64;
+    if (label.includes('MUNICÍPIO') || label.includes('MUNICIPIO')) return orientation === 'landscape' ? 64 : 50;
+    if (label.includes('BAIRRO')) return orientation === 'landscape' ? 62 : 50;
+    if (label.includes('LOGRADOURO')) return orientation === 'landscape' ? 110 : '*';
     if (label.includes('NATUREZA')) return '*';
     return 'auto';
   });
+  return [orderColWidth, ...dataWidths];
 }
 
 function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape: boolean) {
@@ -244,28 +274,49 @@ export function buildPdfDocDefinition(
 
   const tableBody: any[] = [];
 
-  const headerCells = visibleColumns.map((col) => ({
-    text: col.label,
-    style: 'tableHeader',
-    fillColor: '#0F172A',
-    color: '#FFFFFF',
-    alignment:
-      col.label.includes('NÚMERO') || col.label.includes('STATUS') || col.label.includes('DATA')
-        ? 'center'
-        : 'left',
-  }));
+  const headerCells = [
+    {
+      text: '#',
+      style: 'tableHeader',
+      fillColor: '#0F172A',
+      color: '#FFFFFF',
+      alignment: 'center',
+    },
+    ...visibleColumns.map((col) => ({
+      text: col.label,
+      style: 'tableHeader',
+      fillColor: '#0F172A',
+      color: '#FFFFFF',
+      alignment:
+        col.label.toUpperCase().includes('NÚMERO') ||
+        col.label.toUpperCase().includes('NUMERO') ||
+        col.label.toUpperCase().includes('STATUS') ||
+        isDateTimeColumn(col.label)
+          ? 'center'
+          : 'left',
+    })),
+  ];
   tableBody.push(headerCells);
 
   filteredRows.forEach((row, rowIndex) => {
     const isEven = rowIndex % 2 === 0;
     const rowFillColor = config.showZebra ? (isEven ? '#FFFFFF' : '#F8FAFC') : '#FFFFFF';
 
+    const orderCell = {
+      text: String(rowIndex + 1),
+      style: 'tableCell',
+      fillColor: rowFillColor,
+      color: '#475569',
+      bold: true,
+      alignment: 'center',
+    };
+
     const rowCells = visibleColumns.map((col) => {
       const val = row[col.key] || '—';
       const labelUpper = col.label.toUpperCase();
       const isStatusCol = labelUpper.includes('STATUS');
       const isNumCol = labelUpper.includes('NÚMERO') || labelUpper.includes('NUMERO');
-      const isDateCol = labelUpper.includes('DATA');
+      const isDateCol = isDateTimeColumn(col.label);
 
       let textColor = '#1E293B';
       let isBold = false;
@@ -285,6 +336,21 @@ export function buildPdfDocDefinition(
         textColor = '#0f172a';
       }
 
+      if (isDateCol) {
+        const parts = splitDateAndTime(val);
+        if (parts) {
+          return {
+            text: [
+              { text: `${parts.date}\n`, color: '#0F172A' },
+              { text: parts.time, color: '#475569' },
+            ],
+            style: 'tableCell',
+            fillColor: rowFillColor,
+            alignment: 'center',
+          };
+        }
+      }
+
       return {
         text: val,
         style: 'tableCell',
@@ -295,7 +361,7 @@ export function buildPdfDocDefinition(
       };
     });
 
-    tableBody.push(rowCells);
+    tableBody.push([orderCell, ...rowCells]);
   });
 
   const columnWidths = calculateColumnWidths(visibleColumns, config.orientation);

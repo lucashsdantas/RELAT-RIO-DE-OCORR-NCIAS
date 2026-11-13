@@ -9,7 +9,8 @@ import {
   Download,
   FileSpreadsheet,
 } from 'lucide-react';
-import { ColumnDefinition, OccurrenceDataset } from '../types/occurrence';
+import { OccurrenceDataset } from '../types/occurrence';
+import { isDateTimeColumn, splitDateAndTime } from '../utils/pdfGenerator';
 
 interface DataTableProps {
   dataset: OccurrenceDataset;
@@ -222,13 +223,16 @@ export const DataTable: React.FC<DataTableProps> = ({
                 </th>
                 {visibleColumns.map((col) => {
                   const isSorted = sortColumnKey === col.key;
+                  const isDateCol = isDateTimeColumn(col.label);
                   return (
                     <th
                       key={col.key}
                       onClick={() => handleSort(col.key)}
-                      className="py-2.5 px-3 font-semibold text-slate-100 border-b border-slate-800 cursor-pointer hover:bg-slate-800 transition-colors whitespace-nowrap"
+                      className={`py-2.5 px-3 font-semibold text-slate-100 border-b border-slate-800 cursor-pointer hover:bg-slate-800 transition-colors whitespace-nowrap ${
+                        isDateCol ? 'text-center' : ''
+                      }`}
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className={`flex items-center gap-1.5 ${isDateCol ? 'justify-center' : ''}`}>
                         <span>{col.label}</span>
                         {isSorted ? (
                           sortDirection === 'asc' ? (
@@ -274,15 +278,26 @@ export const DataTable: React.FC<DataTableProps> = ({
                         const labelUpper = col.label.toUpperCase();
                         const isStatus = labelUpper.includes('STATUS');
                         const isNum = labelUpper.includes('NÚMERO') || labelUpper.includes('NUMERO');
+                        const isDateCol = isDateTimeColumn(col.label);
+                        const dateParts = isDateCol ? splitDateAndTime(val) : null;
 
                         return (
                           <td
                             key={col.key}
                             className={`py-2 px-3 text-slate-800 ${
                               isNum ? 'font-mono font-semibold text-slate-900 whitespace-nowrap' : ''
-                            }`}
+                            } ${isDateCol ? 'text-center' : ''}`}
                           >
-                            {isStatus ? renderStatusBadge(val) : val}
+                            {isStatus ? (
+                              renderStatusBadge(val)
+                            ) : dateParts ? (
+                              <div className="flex flex-col items-center justify-center leading-tight font-mono whitespace-nowrap">
+                                <span className="text-slate-900">{dateParts.date}</span>
+                                <span className="text-[11px] text-slate-500">{dateParts.time}</span>
+                              </div>
+                            ) : (
+                              val
+                            )}
                           </td>
                         );
                       })}
