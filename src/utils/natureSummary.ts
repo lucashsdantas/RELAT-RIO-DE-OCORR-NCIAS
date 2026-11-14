@@ -1,13 +1,21 @@
 import { ColumnDefinition, OccurrenceRow } from '../types/occurrence';
 import {
   NATURE_CATALOG,
+  NatureCatalogEntry,
   OccurrenceClassification,
   OccurrenceSummaryReport,
   GroupSummaryRow,
   NatureSummaryRow,
   SubGroupSummaryBlock,
+  ProductivitySummaryRow,
   detectNatureCandidates,
 } from './natureCatalog';
+
+const PRODUCTIVITY_GROUP = 'PRODUTIVIDADE';
+
+export function isProductivityEntry(entry: NatureCatalogEntry): boolean {
+  return entry.group.trim().toUpperCase() === PRODUCTIVITY_GROUP;
+}
 
 export function findColumnKeyByKeyword(
   headers: ColumnDefinition[],
@@ -34,41 +42,61 @@ export function classifyFilteredRows(
     const rawText = natureColKey ? row[natureColKey] || '' : '';
 
     const candidates = detectNatureCandidates(rawText);
+    const operationalCandidates = candidates.filter((c) => !isProductivityEntry(c));
+    const productivityEntries = candidates.filter((c) => isProductivityEntry(c));
+    const isExclusiveProductivity =
+      productivityEntries.length > 0 && operationalCandidates.length === 0;
+
+    // Candidatos que concorrem para a natureza predominante da ocorrência
+    const primaryPool =
+      operationalCandidates.length > 0 ? operationalCandidates : productivityEntries;
+
     const overrideId = overrides[rowIndex];
     const overriddenEntry = overrideId
       ? NATURE_CATALOG.find((e) => e.id === overrideId) || null
       : null;
+
+    const hasMultiple = primaryPool.length > 1;
 
     if (overriddenEntry) {
       return {
         rowIndex,
         rawText,
         candidates,
+        operationalCandidates,
+        productivityEntries,
+        isExclusiveProductivity,
         selectedEntry: overriddenEntry,
-        hasMultipleCandidates: candidates.length > 1,
+        hasMultipleCandidates: hasMultiple,
         isUnclassified: false,
         isManuallyOverridden: true,
       };
     }
 
-    if (candidates.length === 1) {
+    if (primaryPool.length === 1) {
       return {
         rowIndex,
         rawText,
         candidates,
-        selectedEntry: candidates[0],
+        operationalCandidates,
+        productivityEntries,
+        isExclusiveProductivity,
+        selectedEntry: primaryPool[0],
         hasMultipleCandidates: false,
         isUnclassified: false,
         isManuallyOverridden: false,
       };
     }
 
-    if (candidates.length > 1) {
+    if (primaryPool.length > 1) {
       return {
         rowIndex,
         rawText,
         candidates,
-        selectedEntry: candidates[0],
+        operationalCandidates,
+        productivityEntries,
+        isExclusiveProductivity,
+        selectedEntry: primaryPool[0],
         hasMultipleCandidates: true,
         isUnclassified: false,
         isManuallyOverridden: false,
@@ -79,6 +107,9 @@ export function classifyFilteredRows(
       rowIndex,
       rawText,
       candidates: [],
+      operationalCandidates: [],
+      productivityEntries: [],
+      isExclusiveProductivity: false,
       selectedEntry: null,
       hasMultipleCandidates: false,
       isUnclassified: true,
@@ -91,70 +122,167 @@ export function buildOccurrenceSummary(
   classifications: OccurrenceClassification[]
 ): OccurrenceSummaryReport {
   const totalOccurrences = classifications.length;
-  const groupCounts = new Map<string, number>();
+  const groupCounts = new Map<string, { predominant: number; concurrent: number }>();
   const natureCounts = new Map<string, NatureSummaryRow>();
+  const productivityCounts = new Map<string, ProductivitySummaryRow>();
 
   let unclassifiedCount = 0;
   let multiplePendingCount = 0;
+  let totalConcurrentNatures = 0;
+  let multiNatureOccurrencesCount = 0;
+
+  let productivityTotalCount = 0;
+  let productivityExclusiveCount = 0;
+  let productivityMixedCount = 0;
+
+  const ensureGroup = (grp: string) => {
+    const existing = groupCounts.get(grp);
+    if (existing) return existing;
+    const created = { predominant: 0, concurrent: 0 };
+    groupCounts.set(grp, created);
+    return created;
+  };
+
+  const ensureNature = (entry: {
+    id: string;
+    code: string;
+    group: string;
+    subGroup: string;
+    nature: string;
+  }) => {
+    const existing = natureCounts.get(entry.id);
+    if (existing) return existing;
+    const created: NatureSummaryRow = {
+      id: entry.id,
+      code: entry.code,
+      group: entry.group,
+      subGroup: entry.subGroup,
+      nature: entry.nature,
+      count: 0,
+      percentage: 0,
+      concurrentCount: 0,
+      concurrentPercentage: 0,
+    };
+    natureCounts.set(entry.id, created);
+    return created;
+  };
 
   for (const item of classifications) {
     if (item.hasMultipleCandidates && !item.isManuallyOverridden) {
       multiplePendingCount++;
     }
 
+    // 1. Contabilização de Produtividade no Quadro à Parte
+    if (item.productivityEntries.length > 0) {
+      const isMixed = item.operationalCandidates.length > 0;
+      for (const prodEntry of item.productivityEntries) {
+        productivityTotalCount += 1;
+        if (isMixed) {
+          productivityMixedCount += 1;
+        } else {
+          productivityExclusiveCount += 1;
+        }
+
+        const existingProd = productivityCounts.get(prodEntry.id);
+        if (existingProd) {
+          existingProd.totalCount += 1;
+          if (isMixed) existingProd.mixedCount += 1;
+          else existingProd.exclusiveCount += 1;
+        } else {
+          productivityCounts.set(prodEntry.id, {
+            id: prodEntry.id,
+            code: prodEntry.code,
+            subGroup: prodEntry.subGroup,
+            nature: prodEntry.nature,
+            exclusiveCount: isMixed ? 0 : 1,
+            mixedCount: isMixed ? 1 : 0,
+            totalCount: 1,
+            percentage: 0,
+          });
+        }
+      }
+    }
+
+    // 2. Contabilização Predominante (1 por atendimento)
     if (item.selectedEntry) {
       const entry = item.selectedEntry;
-      groupCounts.set(entry.group, (groupCounts.get(entry.group) || 0) + 1);
-
-      const existing = natureCounts.get(entry.id);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        natureCounts.set(entry.id, {
-          id: entry.id,
-          code: entry.code,
-          group: entry.group,
-          subGroup: entry.subGroup,
-          nature: entry.nature,
-          count: 1,
-          percentage: 0,
-        });
-      }
+      ensureGroup(entry.group).predominant += 1;
+      ensureNature(entry).count += 1;
     } else {
       unclassifiedCount++;
       const fallbackGroup = 'NÃO CLASSIFICADO';
       const fallbackText = (item.rawText || 'Sem natureza informada').trim();
       const fallbackId = `UNCLASSIFIED__${fallbackText.toUpperCase()}`;
 
-      groupCounts.set(fallbackGroup, (groupCounts.get(fallbackGroup) || 0) + 1);
+      ensureGroup(fallbackGroup).predominant += 1;
+      ensureNature({
+        id: fallbackId,
+        code: '—',
+        group: fallbackGroup,
+        subGroup: 'A DEFINIR',
+        nature: fallbackText,
+      }).count += 1;
+    }
 
-      const existing = natureCounts.get(fallbackId);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        natureCounts.set(fallbackId, {
-          id: fallbackId,
-          code: '—',
-          group: fallbackGroup,
-          subGroup: 'A DEFINIR',
-          nature: fallbackText,
-          count: 1,
-          percentage: 0,
-        });
+    // 3. Contabilização de Todas as Naturezas Concorrentes no Quadro Principal
+    //    - Se houver naturezas operacionais detectadas (não-Produtividade), conta todas elas (ex: Incêndio + Resgate = 2).
+    //    - Se a ocorrência for exclusiva de Produtividade, conta a(s) natureza(s) de Produtividade detectada(s).
+    //    - Se o operador selecionou manualmente uma natureza que não estava nas detectadas, garante que ela seja contada.
+    const concurrentList: NatureCatalogEntry[] =
+      item.operationalCandidates.length > 0
+        ? [...item.operationalCandidates]
+        : item.productivityEntries.length > 0
+        ? [...item.productivityEntries]
+        : item.selectedEntry
+        ? [item.selectedEntry]
+        : [];
+
+    if (item.selectedEntry && !concurrentList.some((e) => e.id === item.selectedEntry!.id)) {
+      if (concurrentList.length === 0) {
+        concurrentList.push(item.selectedEntry);
       }
+    }
+
+    if (concurrentList.length > 1) {
+      multiNatureOccurrencesCount += 1;
+    }
+
+    if (concurrentList.length > 0) {
+      for (const cEntry of concurrentList) {
+        totalConcurrentNatures += 1;
+        ensureGroup(cEntry.group).concurrent += 1;
+        ensureNature(cEntry).concurrentCount += 1;
+      }
+    } else {
+      const fallbackGroup = 'NÃO CLASSIFICADO';
+      const fallbackText = (item.rawText || 'Sem natureza informada').trim();
+      const fallbackId = `UNCLASSIFIED__${fallbackText.toUpperCase()}`;
+      totalConcurrentNatures += 1;
+      ensureGroup(fallbackGroup).concurrent += 1;
+      ensureNature({
+        id: fallbackId,
+        code: '—',
+        group: fallbackGroup,
+        subGroup: 'A DEFINIR',
+        nature: fallbackText,
+      }).concurrentCount += 1;
     }
   }
 
   const byGroup: GroupSummaryRow[] = Array.from(groupCounts.entries())
-    .map(([group, count]) => ({
+    .map(([group, counts]) => ({
       group,
-      count,
-      percentage: totalOccurrences > 0 ? (count / totalOccurrences) * 100 : 0,
+      count: counts.predominant,
+      percentage: totalOccurrences > 0 ? (counts.predominant / totalOccurrences) * 100 : 0,
+      concurrentCount: counts.concurrent,
+      concurrentPercentage:
+        totalConcurrentNatures > 0 ? (counts.concurrent / totalConcurrentNatures) * 100 : 0,
     }))
     .sort((a, b) => {
       if (a.group === 'NÃO CLASSIFICADO') return 1;
       if (b.group === 'NÃO CLASSIFICADO') return -1;
       if (b.count !== a.count) return b.count - a.count;
+      if (b.concurrentCount !== a.concurrentCount) return b.concurrentCount - a.concurrentCount;
       return a.group.localeCompare(b.group, 'pt-BR');
     });
 
@@ -163,6 +291,8 @@ export function buildOccurrenceSummary(
   const allNaturesWithPct: NatureSummaryRow[] = Array.from(natureCounts.values()).map((n) => ({
     ...n,
     percentage: totalOccurrences > 0 ? (n.count / totalOccurrences) * 100 : 0,
+    concurrentPercentage:
+      totalConcurrentNatures > 0 ? (n.concurrentCount / totalConcurrentNatures) * 100 : 0,
   }));
 
   // Agrupa por Grupo + Sub-grupo e calcula os subtotais de cada Sub-grupo
@@ -174,6 +304,7 @@ export function buildOccurrenceSummary(
     if (block) {
       block.items.push(item);
       block.subtotalCount += item.count;
+      block.subtotalConcurrentCount += item.concurrentCount;
     } else {
       subGroupMap.set(key, {
         group: item.group,
@@ -181,6 +312,8 @@ export function buildOccurrenceSummary(
         items: [item],
         subtotalCount: item.count,
         subtotalPercentage: 0,
+        subtotalConcurrentCount: item.concurrentCount,
+        subtotalConcurrentPercentage: 0,
       });
     }
   }
@@ -189,8 +322,13 @@ export function buildOccurrenceSummary(
     .map((block) => ({
       ...block,
       subtotalPercentage: totalOccurrences > 0 ? (block.subtotalCount / totalOccurrences) * 100 : 0,
+      subtotalConcurrentPercentage:
+        totalConcurrentNatures > 0
+          ? (block.subtotalConcurrentCount / totalConcurrentNatures) * 100
+          : 0,
       items: block.items.sort((a, b) => {
         if (b.count !== a.count) return b.count - a.count;
+        if (b.concurrentCount !== a.concurrentCount) return b.concurrentCount - a.concurrentCount;
         return a.code.localeCompare(b.code, 'pt-BR');
       }),
     }))
@@ -199,18 +337,36 @@ export function buildOccurrenceSummary(
       const gB = groupOrder.get(b.group) ?? 999;
       if (gA !== gB) return gA - gB;
       if (b.subtotalCount !== a.subtotalCount) return b.subtotalCount - a.subtotalCount;
+      if (b.subtotalConcurrentCount !== a.subtotalConcurrentCount) {
+        return b.subtotalConcurrentCount - a.subtotalConcurrentCount;
+      }
       return a.subGroup.localeCompare(b.subGroup, 'pt-BR');
     });
 
-  // byNature ordenado acompanhando os blocos de sub-grupo
   const byNature: NatureSummaryRow[] = bySubGroup.flatMap((block) => block.items);
+
+  const productivitySummary: ProductivitySummaryRow[] = Array.from(productivityCounts.values())
+    .map((p) => ({
+      ...p,
+      percentage: productivityTotalCount > 0 ? (p.totalCount / productivityTotalCount) * 100 : 0,
+    }))
+    .sort((a, b) => {
+      if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
+      return a.code.localeCompare(b.code, 'pt-BR');
+    });
 
   return {
     totalOccurrences,
     totalClassified: totalOccurrences - unclassifiedCount,
+    totalConcurrentNatures,
+    multiNatureOccurrencesCount,
     byGroup,
     bySubGroup,
     byNature,
+    productivitySummary,
+    productivityTotalCount,
+    productivityExclusiveCount,
+    productivityMixedCount,
     unclassifiedCount,
     multiplePendingCount,
   };

@@ -10,6 +10,9 @@ export interface OccurrenceClassification {
   rowIndex: number;
   rawText: string;
   candidates: NatureCatalogEntry[];
+  operationalCandidates: NatureCatalogEntry[];
+  productivityEntries: NatureCatalogEntry[];
+  isExclusiveProductivity: boolean;
   selectedEntry: NatureCatalogEntry | null;
   hasMultipleCandidates: boolean;
   isUnclassified: boolean;
@@ -20,6 +23,8 @@ export interface GroupSummaryRow {
   group: string;
   count: number;
   percentage: number;
+  concurrentCount: number;
+  concurrentPercentage: number;
 }
 
 export interface NatureSummaryRow {
@@ -30,6 +35,8 @@ export interface NatureSummaryRow {
   nature: string;
   count: number;
   percentage: number;
+  concurrentCount: number;
+  concurrentPercentage: number;
 }
 
 export interface SubGroupSummaryBlock {
@@ -38,14 +45,33 @@ export interface SubGroupSummaryBlock {
   items: NatureSummaryRow[];
   subtotalCount: number;
   subtotalPercentage: number;
+  subtotalConcurrentCount: number;
+  subtotalConcurrentPercentage: number;
+}
+
+export interface ProductivitySummaryRow {
+  id: string;
+  code: string;
+  subGroup: string;
+  nature: string;
+  exclusiveCount: number;
+  mixedCount: number;
+  totalCount: number;
+  percentage: number;
 }
 
 export interface OccurrenceSummaryReport {
   totalOccurrences: number;
   totalClassified: number;
+  totalConcurrentNatures: number;
+  multiNatureOccurrencesCount: number;
   byGroup: GroupSummaryRow[];
   bySubGroup: SubGroupSummaryBlock[];
   byNature: NatureSummaryRow[];
+  productivitySummary: ProductivitySummaryRow[];
+  productivityTotalCount: number;
+  productivityExclusiveCount: number;
+  productivityMixedCount: number;
   unclassifiedCount: number;
   multiplePendingCount: number;
 }

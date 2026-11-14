@@ -125,8 +125,9 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
   const groupBody: any[] = [
     [
       { text: 'GRUPO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
-      { text: 'OCORRÊNCIAS', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
-      { text: '%', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: 'ATEND. (PREDOM.)', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: 'TOTAL NATUREZAS', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: '% NAT.', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
     ],
   ];
 
@@ -135,25 +136,28 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
     groupBody.push([
       { text: g.group, style: 'tableCell', fillColor: fill, bold: true, color: '#0F172A' },
       { text: String(g.count), style: 'tableCell', fillColor: fill, bold: true, alignment: 'center', color: '#0F172A' },
-      { text: pct(g.percentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
+      { text: String(g.concurrentCount), style: 'tableCell', fillColor: fill, bold: true, alignment: 'center', color: '#0369A1' },
+      { text: pct(g.concurrentPercentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
     ]);
   });
 
   groupBody.push([
     { text: 'TOTAL GERAL POR GRUPO', style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
     { text: String(summary.totalOccurrences), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
-    { text: summary.totalOccurrences > 0 ? '100,0%' : '0,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+    { text: String(summary.totalConcurrentNatures), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+    { text: summary.totalConcurrentNatures > 0 ? '100,0%' : '0,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
   ]);
 
-  // Tabela 2: Quantitativo por Natureza
+  // Tabela 2: Quantitativo por Sub-grupo e Natureza
   const natureBody: any[] = [
     [
       { text: 'GRUPO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
       { text: 'CÓDIGO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
       { text: 'SUB-GRUPO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
       { text: 'NATUREZA', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
-      { text: 'QTD.', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
-      { text: '%', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: 'ATEND.', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: 'NATUREZAS', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: '% NAT.', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
     ],
   ];
 
@@ -166,7 +170,8 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
         { text: n.subGroup, style: 'tableCell', fillColor: fill, color: '#334155' },
         { text: n.nature, style: 'tableCell', fillColor: fill, color: '#0F172A' },
         { text: String(n.count), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
-        { text: pct(n.percentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
+        { text: String(n.concurrentCount), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0369A1' },
+        { text: pct(n.concurrentPercentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
       ]);
     });
 
@@ -184,17 +189,19 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
       {},
       {},
       { text: String(block.subtotalCount), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
-      { text: pct(block.subtotalPercentage), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
+      { text: String(block.subtotalConcurrentCount), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
+      { text: pct(block.subtotalConcurrentPercentage), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
     ]);
   });
 
   natureBody.push([
-    { text: 'TOTAL GERAL DE NATUREZAS ATENDIDAS', colSpan: 4, style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
+    { text: 'TOTAL GERAL (ATENDIMENTOS × NATUREZAS)', colSpan: 4, style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
     {},
     {},
     {},
     { text: String(summary.totalOccurrences), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
-    { text: summary.totalOccurrences > 0 ? '100,0%' : '0,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+    { text: String(summary.totalConcurrentNatures), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+    { text: summary.totalConcurrentNatures > 0 ? '100,0%' : '0,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
   ]);
 
   const summaryTableLayout = {
@@ -208,19 +215,19 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
     paddingBottom: () => 3,
   };
 
-  return [
+  const blocks: any[] = [
     {
       margin: [0, 16, 0, 6],
       unbreakable: true,
       stack: [
         {
-          text: 'QUADRO RESUMO — QUANTITATIVO DE OCORRÊNCIAS ATENDIDAS',
+          text: 'QUADRO RESUMO — QUANTITATIVO DE ATENDIMENTOS E NATUREZAS',
           fontSize: 9.5,
           bold: true,
           color: '#0F172A',
         },
         {
-          text: `Consolidado por Grupo e por Natureza Predominante (Total de Ocorrências: ${summary.totalOccurrences} | Total de Naturezas: ${summary.totalOccurrences})`,
+          text: `Total de Atendimentos (Ocorrências): ${summary.totalOccurrences} | Total de Naturezas (incl. concorrentes): ${summary.totalConcurrentNatures}`,
           fontSize: 7,
           color: '#475569',
           margin: [0, 1, 0, 6],
@@ -229,7 +236,7 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
           table: {
             headerRows: 1,
             dontBreakRows: true,
-            widths: isLandscape ? [260, 80, 60] : ['*', 75, 50],
+            widths: isLandscape ? [230, 72, 72, 48] : ['*', 62, 62, 40],
             body: groupBody,
           },
           layout: summaryTableLayout,
@@ -241,12 +248,80 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
       table: {
         headerRows: 1,
         dontBreakRows: true,
-        widths: isLandscape ? [125, 48, 115, '*', 42, 42] : [95, 42, 80, '*', 34, 34],
+        widths: isLandscape ? [115, 44, 105, '*', 42, 48, 38] : [82, 38, 72, '*', 32, 38, 30],
         body: natureBody,
       },
       layout: summaryTableLayout,
     },
   ];
+
+  // Quadro à parte — Naturezas de Produtividade
+  if (summary.productivityTotalCount > 0) {
+    const prodBody: any[] = [
+      [
+        { text: 'CÓDIGO', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
+        { text: 'SUB-GRUPO', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'left' },
+        { text: 'NATUREZA DE PRODUTIVIDADE', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'left' },
+        { text: 'EXCLUSIVA', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
+        { text: 'COM OUTRA NAT.', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
+        { text: 'ATENDIMENTOS', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
+        { text: '%', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
+      ],
+    ];
+
+    summary.productivitySummary.forEach((p, idx) => {
+      const fill = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      prodBody.push([
+        { text: p.code, style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
+        { text: p.subGroup, style: 'tableCell', fillColor: fill, color: '#334155' },
+        { text: p.nature, style: 'tableCell', fillColor: fill, color: '#0F172A' },
+        { text: String(p.exclusiveCount), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#334155' },
+        { text: String(p.mixedCount), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#334155' },
+        { text: String(p.totalCount), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
+        { text: pct(p.percentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
+      ]);
+    });
+
+    prodBody.push([
+      { text: 'TOTAL GERAL DE PRODUTIVIDADE', colSpan: 3, style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
+      {},
+      {},
+      { text: String(summary.productivityExclusiveCount), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+      { text: String(summary.productivityMixedCount), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+      { text: String(summary.productivityTotalCount), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+      { text: '100,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+    ]);
+
+    blocks.push({
+      margin: [0, 14, 0, 0],
+      unbreakable: true,
+      stack: [
+        {
+          text: 'QUADRO À PARTE — ATENDIMENTOS COM NATUREZA DE PRODUTIVIDADE',
+          fontSize: 9,
+          bold: true,
+          color: '#0F172A',
+        },
+        {
+          text: `Total de registros de Produtividade: ${summary.productivityTotalCount} | Exclusivas (só Produtividade): ${summary.productivityExclusiveCount} | Em ocorrências mistas: ${summary.productivityMixedCount}`,
+          fontSize: 7,
+          color: '#475569',
+          margin: [0, 1, 0, 6],
+        },
+        {
+          table: {
+            headerRows: 1,
+            dontBreakRows: true,
+            widths: isLandscape ? [48, 85, '*', 48, 62, 58, 38] : [42, 64, '*', 40, 50, 48, 30],
+            body: prodBody,
+          },
+          layout: summaryTableLayout,
+        },
+      ],
+    });
+  }
+
+  return blocks;
 }
 
 /**

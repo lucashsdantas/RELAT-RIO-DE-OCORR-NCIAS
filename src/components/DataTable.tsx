@@ -1,23 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
-  Filter,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   Eye,
   Download,
-  FileSpreadsheet,
+  RotateCcw,
 } from 'lucide-react';
-import { OccurrenceDataset } from '../types/occurrence';
+import { OccurrenceDataset, OccurrenceRow, ReportConfig } from '../types/occurrence';
 import { isDateTimeColumn, splitDateAndTime } from '../utils/pdfGenerator';
+import { findColumnKeyByKeyword } from '../utils/natureSummary';
 
 interface DataTableProps {
   dataset: OccurrenceDataset;
-  searchQuery: string;
-  onSearchChange: (q: string) => void;
-  statusFilter: string;
-  onStatusFilterChange: (s: string) => void;
+  filteredRows: OccurrenceRow[];
+  config: ReportConfig;
+  onChangeConfig: (newConfig: Partial<ReportConfig>) => void;
+  onClearFilters: () => void;
   onOpenPdfPreview: () => void;
   onDownloadPdf: () => void;
   isGeneratingPdf: boolean;
@@ -25,10 +25,10 @@ interface DataTableProps {
 
 export const DataTable: React.FC<DataTableProps> = ({
   dataset,
-  searchQuery,
-  onSearchChange,
-  statusFilter,
-  onStatusFilterChange,
+  filteredRows,
+  config,
+  onChangeConfig,
+  onClearFilters,
   onOpenPdfPreview,
   onDownloadPdf,
   isGeneratingPdf,
@@ -43,42 +43,56 @@ export const DataTable: React.FC<DataTableProps> = ({
     [dataset.headers]
   );
 
-  // Extrai lista única de status para o filtro dropdown
-  const statusOptions = useMemo(() => {
-    const statusCol = dataset.headers.find((h) => h.label.toUpperCase().includes('STATUS'));
-    if (!statusCol) return [];
+  const statusColKey = useMemo(
+    () => findColumnKeyByKeyword(dataset.headers, ['STATUS', 'SITUACAO']),
+    [dataset.headers]
+  );
+  const municipalityColKey = useMemo(
+    () => findColumnKeyByKeyword(dataset.headers, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE']),
+    [dataset.headers]
+  );
+  const natureColKey = useMemo(
+    () => findColumnKeyByKeyword(dataset.headers, ['NATUREZA']),
+    [dataset.headers]
+  );
 
+  const statusOptions = useMemo(() => {
+    if (!statusColKey) return [];
     const set = new Set<string>();
     dataset.rows.forEach((r) => {
-      const val = r[statusCol.key];
-      if (val && val.trim()) set.add(val.trim());
+      const val = r[statusColKey]?.trim();
+      if (val) set.add(val);
     });
-    return Array.from(set).sort();
-  }, [dataset]);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [dataset.rows, statusColKey]);
 
-  // Filtra as linhas com base no status e na busca textual
-  const filteredRows = useMemo(() => {
-    return dataset.rows.filter((row) => {
-      // Filtro de status
-      if (statusFilter !== 'all') {
-        const statusCol = dataset.headers.find((h) => h.label.toUpperCase().includes('STATUS'));
-        if (statusCol && row[statusCol.key]?.trim() !== statusFilter) {
-          return false;
-        }
-      }
-
-      // Filtro de busca textual em todas as colunas
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matches = Object.values(row).some((val) =>
-          val.toLowerCase().includes(query)
-        );
-        if (!matches) return false;
-      }
-
-      return true;
+  const municipalityOptions = useMemo(() => {
+    if (!municipalityColKey) return [];
+    const set = new Set<string>();
+    dataset.rows.forEach((r) => {
+      const val = r[municipalityColKey]?.trim();
+      if (val) set.add(val);
     });
-  }, [dataset, statusFilter, searchQuery]);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [dataset.rows, municipalityColKey]);
+
+  const natureOptions = useMemo(() => {
+    if (!natureColKey) return [];
+    const set = new Set<string>();
+    dataset.rows.forEach((r) => {
+      const raw = r[natureColKey]?.trim();
+      if (!raw) return;
+      raw.split(/[;|\n]+/).forEach((part) => {
+        const clean = part.trim();
+        if (clean) set.add(clean);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [dataset.rows, natureColKey]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredRows.length]);
 
   // Ordenação
   const sortedRows = useMemo(() => {
@@ -116,99 +130,225 @@ export const DataTable: React.FC<DataTableProps> = ({
     setCurrentPage(1);
   };
 
+  const hasActiveFilters = Boolean(
+    config.filterStatus !== 'all' ||
+      config.filterMunicipality !== 'all' ||
+      config.filterOccurrence.trim() ||
+      config.filterNature.trim() ||
+      config.filterStartDateTime ||
+      config.filterEndDateTime ||
+      config.searchQuery.trim()
+  );
+
   const renderStatusBadge = (val: string) => {
     const norm = val.toLowerCase();
-    let colorClasses = 'bg-slate-100 text-slate-800 border-slate-200';
+    let colorClasses = 'text-slate-800';
 
-    if (norm.includes('conclu')) {
-      colorClasses = 'bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold';
+    if (norm.includes('conclu') || norm.includes('encerrad')) {
+      colorClasses = 'text-emerald-700 font-semibold';
     } else if (norm.includes('andamento')) {
-      colorClasses = 'bg-amber-50 text-amber-900 border-amber-200 font-semibold';
+      colorClasses = 'text-amber-700 font-semibold';
     } else if (norm.includes('pendente')) {
-      colorClasses = 'bg-rose-50 text-rose-800 border-rose-200 font-semibold';
+      colorClasses = 'text-rose-700 font-semibold';
     }
 
-    return (
-      <span className={`inline-block px-2 py-0.5 text-[11px] rounded border ${colorClasses}`}>
-        {val}
-      </span>
-    );
+    return <span className={`text-xs ${colorClasses}`}>{val}</span>;
   };
 
   return (
-    <section id="previa" className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-      {/* Barra Superior da Tabela */}
+    <section id="filtros" className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+      {/* Barra Superior */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-slate-100">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-bold text-slate-900">
-              Prévia das Ocorrências Identificadas
+              Conferência e Filtros das Ocorrências
             </h2>
-            <span className="text-xs font-mono font-semibold px-2 py-0.5 bg-slate-100 text-slate-700 rounded">
-              {filteredRows.length} de {dataset.totalRows} registros
+            <span className="text-xs font-mono tabular-nums text-slate-500">
+              {filteredRows.length} de {dataset.totalRows} registros ativos no relatório
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Confira os dados antes de gerar o PDF. Clique no cabeçalho para ordenar.
+            Os filtros aplicados aqui atualizam imediatamente a prévia do documento, os quadros resumo e o PDF exportado.
           </p>
         </div>
 
-        {/* Controles de Busca e Filtro */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative min-w-[200px] sm:min-w-[240px]">
-            <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                onSearchChange(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Pesquisar número, bairro, fato..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white text-slate-800"
-            />
-          </div>
-
-          {statusOptions.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1">
-              <Filter className="w-3.5 h-3.5 text-slate-500" />
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  onStatusFilterChange(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="bg-transparent text-xs text-slate-700 font-medium focus:outline-none cursor-pointer"
-              >
-                <option value="all">Todos os Status</option>
-                {statusOptions.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Limpar Filtros</span>
+            </button>
           )}
 
           <button
             type="button"
             onClick={onOpenPdfPreview}
-            disabled={isGeneratingPdf}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            disabled={isGeneratingPdf || filteredRows.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
           >
             <Eye className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden sm:inline">Visualizar</span> PDF
+            <span>Visualizar PDF</span>
           </button>
 
           <button
             type="button"
             onClick={onDownloadPdf}
-            disabled={isGeneratingPdf}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-xs transition-colors cursor-pointer"
+            disabled={isGeneratingPdf || filteredRows.length === 0}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 rounded-lg shadow-xs transition-colors cursor-pointer whitespace-nowrap"
           >
             <Download className="w-3.5 h-3.5 text-sky-400" />
             <span>Baixar PDF</span>
           </button>
+        </div>
+      </div>
+
+      {/* Painel de Filtros Completos */}
+      <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Filtro por Ocorrência (Número) */}
+          <div>
+            <label htmlFor="flt-occurrence" className="text-[11px] font-bold text-slate-700 block mb-1">
+              Ocorrência (Número)
+            </label>
+            <input
+              id="flt-occurrence"
+              type="text"
+              value={config.filterOccurrence}
+              onChange={(e) => onChangeConfig({ filterOccurrence: e.target.value })}
+              placeholder="Ex: 2026-08912"
+              className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800"
+            />
+          </div>
+
+          {/* Filtro por Natureza */}
+          <div>
+            <label htmlFor="flt-nature" className="text-[11px] font-bold text-slate-700 block mb-1">
+              Natureza (Código ou Texto)
+            </label>
+            <input
+              id="flt-nature"
+              type="text"
+              list="datatable-nature-options"
+              value={config.filterNature}
+              onChange={(e) => onChangeConfig({ filterNature: e.target.value })}
+              placeholder="Digite ou escolha uma natureza..."
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800"
+            />
+            <datalist id="datatable-nature-options">
+              {natureOptions.map((nat) => (
+                <option key={nat} value={nat} />
+              ))}
+            </datalist>
+          </div>
+
+          {/* Filtro por Município */}
+          <div>
+            <label htmlFor="flt-municipality" className="text-[11px] font-bold text-slate-700 block mb-1">
+              Município
+            </label>
+            <select
+              id="flt-municipality"
+              value={config.filterMunicipality}
+              onChange={(e) => onChangeConfig({ filterMunicipality: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800 cursor-pointer"
+            >
+              <option value="all">Todos os Municípios ({municipalityOptions.length})</option>
+              {municipalityOptions.map((mun) => (
+                <option key={mun} value={mun}>
+                  {mun}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro por Status */}
+          <div>
+            <label htmlFor="flt-status" className="text-[11px] font-bold text-slate-700 block mb-1">
+              Status
+            </label>
+            <select
+              id="flt-status"
+              value={config.filterStatus}
+              onChange={(e) => onChangeConfig({ filterStatus: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800 cursor-pointer"
+            >
+              <option value="all">Todos os Status ({statusOptions.length})</option>
+              {statusOptions.map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Linha 2: Intervalo de Datas/Horários + Busca Livre */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 border-t border-slate-200/80">
+          <div>
+            <label htmlFor="flt-date-field" className="text-[11px] font-bold text-slate-700 block mb-1">
+              Campo de Data/Hora
+            </label>
+            <select
+              id="flt-date-field"
+              value={config.filterDateField}
+              onChange={(e) =>
+                onChangeConfig({ filterDateField: e.target.value as 'any' | 'fact' | 'register' })
+              }
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800 cursor-pointer"
+            >
+              <option value="any">Data Fato ou Registro</option>
+              <option value="fact">Somente Data Fato</option>
+              <option value="register">Somente Data Registro</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="flt-start-dt" className="text-[11px] font-bold text-slate-700 block mb-1">
+              Data e Hora Inicial
+            </label>
+            <input
+              id="flt-start-dt"
+              type="datetime-local"
+              value={config.filterStartDateTime}
+              onChange={(e) => onChangeConfig({ filterStartDateTime: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="flt-end-dt" className="text-[11px] font-bold text-slate-700 block mb-1">
+              Data e Hora Final
+            </label>
+            <input
+              id="flt-end-dt"
+              type="datetime-local"
+              value={config.filterEndDateTime}
+              onChange={(e) => onChangeConfig({ filterEndDateTime: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="flt-global" className="text-[11px] font-bold text-slate-700 block mb-1">
+              Busca Livre (Bairro, Rua, Viatura...)
+            </label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+              <input
+                id="flt-global"
+                type="text"
+                value={config.searchQuery}
+                onChange={(e) => onChangeConfig({ searchQuery: e.target.value })}
+                placeholder="Pesquisar em qualquer campo..."
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -218,7 +358,7 @@ export const DataTable: React.FC<DataTableProps> = ({
           <table className="w-full text-left border-collapse text-xs">
             <thead className="bg-slate-900 text-white sticky top-0 z-10 select-none">
               <tr>
-                <th className="py-2.5 px-3 font-mono text-[11px] text-slate-400 text-center w-12 border-b border-slate-800">
+                <th className="py-2.5 px-3 font-mono text-[11px] text-slate-300 text-center w-12 border-b border-slate-800">
                   #
                 </th>
                 {visibleColumns.map((col) => {
@@ -265,12 +405,12 @@ export const DataTable: React.FC<DataTableProps> = ({
                   const isEven = idx % 2 === 0;
                   return (
                     <tr
-                      key={idx}
+                      key={rowNumber}
                       className={`hover:bg-slate-100/70 transition-colors ${
                         isEven ? 'bg-white' : 'bg-slate-50/50'
                       }`}
                     >
-                      <td className="py-2 px-3 text-center font-mono text-slate-400 text-[11px]">
+                      <td className="py-2 px-3 text-center font-mono text-slate-500 font-semibold text-[11px] tabular-nums">
                         {rowNumber}
                       </td>
                       {visibleColumns.map((col) => {
@@ -313,8 +453,8 @@ export const DataTable: React.FC<DataTableProps> = ({
       {/* Paginação */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2 text-xs text-slate-600">
-          <div>
-            Mostrando registros {(currentPage - 1) * rowsPerPage + 1} até{' '}
+          <div className="font-mono tabular-nums">
+            Mostrando {(currentPage - 1) * rowsPerPage + 1}–
             {Math.min(currentPage * rowsPerPage, sortedRows.length)} de {sortedRows.length}
           </div>
 
@@ -327,7 +467,7 @@ export const DataTable: React.FC<DataTableProps> = ({
             >
               Anterior
             </button>
-            <span className="font-mono px-2">
+            <span className="font-mono px-2 tabular-nums">
               {currentPage} / {totalPages}
             </span>
             <button

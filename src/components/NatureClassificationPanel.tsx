@@ -98,7 +98,8 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                 3. Definição da Natureza Predominante &amp; Conciliação do Resumo
               </h3>
               <span className="text-xs font-mono text-slate-500">
-                {summary.totalOccurrences} ocorrências · {summary.totalClassified} classificadas
+                {summary.totalOccurrences} atendimentos · {summary.totalConcurrentNatures} naturezas operacionais
+                {summary.productivityTotalCount > 0 ? ` · ${summary.productivityTotalCount} produtividade` : ''}
               </span>
             </div>
             <p className="text-xs text-slate-600 mt-0.5">
@@ -177,7 +178,11 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                         </span>
                       ) : item.hasMultipleCandidates && !item.isManuallyOverridden ? (
                         <span className="font-semibold text-amber-800">
-                          {item.candidates.length} naturezas detectadas — confirme a predominante
+                          {item.operationalCandidates.length > 1 ? item.operationalCandidates.length : item.candidates.length} naturezas concorrentes — confirme a predominante
+                        </span>
+                      ) : item.isExclusiveProductivity ? (
+                        <span className="font-semibold text-sky-800">
+                          Exclusiva de Produtividade — contabilizada em Produtividade
                         </span>
                       ) : item.isManuallyOverridden ? (
                         <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
@@ -186,6 +191,14 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                         </span>
                       ) : (
                         <span className="text-slate-600">Classificação automática</span>
+                      )}
+                      {item.productivityEntries.length > 0 && !item.isExclusiveProductivity && (
+                        <>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-sky-700 font-medium">
+                            + {item.productivityEntries.length} natureza(s) de Produtividade no quadro à parte
+                          </span>
+                        </>
                       )}
                     </div>
                     <p className="text-xs font-mono text-slate-700 mt-1 break-words">

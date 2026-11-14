@@ -9,6 +9,15 @@ export type OccurrenceRow = Record<string, string>;
 
 export type ServiceWing = 'A' | 'B' | 'C' | 'D';
 
+export interface LogoOption {
+  id: string;
+  name: string;
+  dataUrl: string;
+  isBuiltIn?: boolean;
+  sourceUrl?: string;
+  addedAt?: string;
+}
+
 export interface OccurrenceDataset {
   headers: ColumnDefinition[];
   rows: OccurrenceRow[];
@@ -26,12 +35,19 @@ export interface ReportConfig {
   startDateTime: string;
   endDateTime: string;
   orientation: 'landscape' | 'portrait';
+  selectedLogoId: string;
   logoBase64: string | null;
   showZebra: boolean;
   repeatHeader: boolean;
   compactMode: boolean;
   confidentialityText: string;
   filterStatus: string;
+  filterOccurrence: string;
+  filterNature: string;
+  filterMunicipality: string;
+  filterDateField: 'any' | 'fact' | 'register';
+  filterStartDateTime: string;
+  filterEndDateTime: string;
   searchQuery: string;
 }
 

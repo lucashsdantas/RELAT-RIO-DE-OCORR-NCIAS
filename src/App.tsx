@@ -5,15 +5,37 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ShieldCheck, FileText, Download, Table2, FileCheck2 } from 'lucide-react';
-import { ColumnDefinition, OccurrenceDataset, ReportConfig } from './types/occurrence';
-import { parseOccurrenceInput, REQUIRED_STANDARD_COLUMNS } from './utils/htmlParser';
+import {
+  ColumnDefinition,
+  LogoOption,
+  OccurrenceDataset,
+  ReportConfig,
+} from './types/occurrence';
+import {
+  MultiPageInputChunk,
+  parseMultiPageOccurrenceInputs,
+  parseOccurrenceDateToMs,
+  parseOccurrenceInput,
+  REQUIRED_STANDARD_COLUMNS,
+} from './utils/htmlParser';
 import {
   createPdfInstance,
   generatePdfBlobUrl,
   generatePdfFileName,
 } from './utils/pdfGenerator';
-import { loadFixedLogoBase64 } from './utils/sampleData';
-import { classifyFilteredRows, buildOccurrenceSummary } from './utils/natureSummary';
+import {
+  convertLogoFileToBase64,
+  DEFAULT_LOGO_ID,
+  FIXED_LOGO_URL,
+  loadFixedLogoBase64,
+  loadSavedCustomLogos,
+  saveCustomLogos,
+} from './utils/sampleData';
+import {
+  buildOccurrenceSummary,
+  classifyFilteredRows,
+  findColumnKeyByKeyword,
+} from './utils/natureSummary';
 import { exportStandaloneSingleFileHtml } from './utils/portableExporter';
 import { Header } from './components/Header';
 import { UploadSection } from './components/UploadSection';
@@ -48,6 +70,7 @@ function loadSavedConfig(defaultRange: { start: string; end: string }): ReportCo
     startDateTime: defaultRange.start,
     endDateTime: defaultRange.end,
     orientation: 'landscape',
+    selectedLogoId: DEFAULT_LOGO_ID,
     logoBase64: null,
     showZebra: true,
     repeatHeader: true,
@@ -55,6 +78,12 @@ function loadSavedConfig(defaultRange: { start: string; end: string }): ReportCo
     confidentialityText:
       'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE VIA SISTEMA DE RELATÓRIOS',
     filterStatus: 'all',
+    filterOccurrence: '',
+    filterNature: '',
+    filterMunicipality: 'all',
+    filterDateField: 'any',
+    filterStartDateTime: '',
+    filterEndDateTime: '',
     searchQuery: '',
   };
 
@@ -65,8 +94,15 @@ function loadSavedConfig(defaultRange: { start: string; end: string }): ReportCo
     return {
       ...baseConfig,
       ...parsed,
-      logoBase64: null, // Logo é carregada separadamente da URL fixa
+      selectedLogoId: parsed.selectedLogoId || DEFAULT_LOGO_ID,
+      logoBase64: null,
       filterStatus: 'all',
+      filterOccurrence: '',
+      filterNature: '',
+      filterMunicipality: 'all',
+      filterDateField: 'any',
+      filterStartDateTime: '',
+      filterEndDateTime: '',
       searchQuery: '',
     };
   } catch {
@@ -106,24 +142,62 @@ export default function App() {
     loadHiddenColumnLabels()
   );
 
+  const [defaultLogoBase64, setDefaultLogoBase64] = useState<string | null>(null);
+  const [customLogos, setCustomLogos] = useState<LogoOption[]>(() => loadSavedCustomLogos());
+  const [logoError, setLogoError] = useState<string | null>(null);
+
   const [config, setConfig] = useState<ReportConfig>(() => loadSavedConfig(defaultRange));
 
   const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
 
-  // Carrega a logo institucional fixa em Base64 PNG para o pdfmake
+  // Carrega a logo institucional padrão em Base64 PNG para o pdfmake
   useEffect(() => {
     let active = true;
     loadFixedLogoBase64().then((base64) => {
       if (active && base64) {
-        setConfig((prev) => ({ ...prev, logoBase64: base64 }));
+        setDefaultLogoBase64(base64);
       }
     });
     return () => {
       active = false;
     };
   }, []);
+
+  const allLogos = useMemo<LogoOption[]>(() => {
+    const builtInLogo: LogoOption = {
+      id: DEFAULT_LOGO_ID,
+      name: 'Brasão Oficial 4º BBM (Padrão)',
+      dataUrl: defaultLogoBase64 || FIXED_LOGO_URL,
+      sourceUrl: FIXED_LOGO_URL,
+      isBuiltIn: true,
+    };
+    return [builtInLogo, ...customLogos];
+  }, [defaultLogoBase64, customLogos]);
+
+  // Mantém config.logoBase64 sincronizado com a logo selecionada
+  useEffect(() => {
+    if (config.selectedLogoId === DEFAULT_LOGO_ID) {
+      setConfig((prev) =>
+        prev.logoBase64 === defaultLogoBase64 ? prev : { ...prev, logoBase64: defaultLogoBase64 }
+      );
+      return;
+    }
+
+    const found = customLogos.find((l) => l.id === config.selectedLogoId);
+    if (found) {
+      setConfig((prev) =>
+        prev.logoBase64 === found.dataUrl ? prev : { ...prev, logoBase64: found.dataUrl }
+      );
+    } else {
+      setConfig((prev) => ({
+        ...prev,
+        selectedLogoId: DEFAULT_LOGO_ID,
+        logoBase64: defaultLogoBase64,
+      }));
+    }
+  }, [config.selectedLogoId, customLogos, defaultLogoBase64]);
 
   // Salva automaticamente as configurações e parâmetros no localStorage sempre que alterados
   useEffect(() => {
@@ -136,6 +210,7 @@ export default function App() {
         startDateTime: config.startDateTime,
         endDateTime: config.endDateTime,
         orientation: config.orientation,
+        selectedLogoId: config.selectedLogoId,
         showZebra: config.showZebra,
         repeatHeader: config.repeatHeader,
         compactMode: config.compactMode,
@@ -153,11 +228,32 @@ export default function App() {
     config.startDateTime,
     config.endDateTime,
     config.orientation,
+    config.selectedLogoId,
     config.showZebra,
     config.repeatHeader,
     config.compactMode,
     config.confidentialityText,
   ]);
+
+  const applyParsedDataset = useCallback(
+    (parsed: OccurrenceDataset, warnings?: string[]) => {
+      const savedHiddenSet = new Set(hiddenColumnLabels.map((l) => l.toUpperCase()));
+      const headersWithSavedVisibility = parsed.headers.map((h) => ({
+        ...h,
+        visible: !savedHiddenSet.has(h.label.toUpperCase()),
+      }));
+
+      setDataset({
+        ...parsed,
+        headers: headersWithSavedVisibility,
+      });
+      setNatureOverrides({});
+      if (warnings && warnings.length > 0) {
+        setWarningMessages(warnings);
+      }
+    },
+    [hiddenColumnLabels]
+  );
 
   const handleProcessInput = useCallback(
     (rawText: string, clipboardHtml?: string, sourceName?: string) => {
@@ -168,41 +264,141 @@ export default function App() {
       setTimeout(() => {
         const result = parseOccurrenceInput(rawText, clipboardHtml, sourceName);
         if (result.success && result.dataset) {
-          // Aplica as preferências salvas de colunas ocultas
-          const savedHiddenSet = new Set(hiddenColumnLabels.map((l) => l.toUpperCase()));
-          const headersWithSavedVisibility = result.dataset.headers.map((h) => ({
-            ...h,
-            visible: !savedHiddenSet.has(h.label.toUpperCase()),
-          }));
-
-          setDataset({
-            ...result.dataset,
-            headers: headersWithSavedVisibility,
-          });
-          setNatureOverrides({});
-          if (result.warnings && result.warnings.length > 0) {
-            setWarningMessages(result.warnings);
-          }
+          applyParsedDataset(result.dataset, result.warnings);
         } else {
           setErrorMessage(result.errorMessage || 'Falha ao extrair tabela dos dados informados.');
         }
         setIsProcessing(false);
       }, 100);
     },
-    [hiddenColumnLabels]
+    [applyParsedDataset]
   );
+
+  const handleProcessMultiPage = useCallback(
+    (pages: MultiPageInputChunk[]) => {
+      setIsProcessing(true);
+      setErrorMessage(null);
+      setWarningMessages([]);
+
+      setTimeout(() => {
+        const result = parseMultiPageOccurrenceInputs(pages);
+        if (result.success && result.dataset) {
+          applyParsedDataset(result.dataset, result.warnings);
+        } else {
+          setErrorMessage(
+            result.errorMessage || 'Falha ao consolidar os dados das páginas informadas.'
+          );
+        }
+        setIsProcessing(false);
+      }, 100);
+    },
+    [applyParsedDataset]
+  );
+
+  const handleClearFilters = useCallback(() => {
+    setConfig((prev) => ({
+      ...prev,
+      filterStatus: 'all',
+      filterOccurrence: '',
+      filterNature: '',
+      filterMunicipality: 'all',
+      filterDateField: 'any',
+      filterStartDateTime: '',
+      filterEndDateTime: '',
+      searchQuery: '',
+    }));
+  }, []);
 
   const handleClearData = useCallback(() => {
     setDataset(null);
     setNatureOverrides({});
     setErrorMessage(null);
     setWarningMessages([]);
-    setConfig((prev) => ({ ...prev, filterStatus: 'all', searchQuery: '' }));
-  }, []);
+    handleClearFilters();
+  }, [handleClearFilters]);
 
   const handleChangeConfig = useCallback((newConfig: Partial<ReportConfig>) => {
     setConfig((prev) => ({ ...prev, ...newConfig }));
   }, []);
+
+  const handleSelectLogo = useCallback(
+    (logoId: string) => {
+      setLogoError(null);
+      if (logoId === DEFAULT_LOGO_ID) {
+        setConfig((prev) => ({
+          ...prev,
+          selectedLogoId: DEFAULT_LOGO_ID,
+          logoBase64: defaultLogoBase64,
+        }));
+        return;
+      }
+      const found = customLogos.find((l) => l.id === logoId);
+      if (found) {
+        setConfig((prev) => ({
+          ...prev,
+          selectedLogoId: found.id,
+          logoBase64: found.dataUrl,
+        }));
+      }
+    },
+    [customLogos, defaultLogoBase64]
+  );
+
+  const handleUploadLogo = useCallback(
+    async (file: File) => {
+      setLogoError(null);
+      if (!file.type.startsWith('image/')) {
+        setLogoError('Envie um arquivo de imagem válido (PNG, JPG, WEBP ou SVG).');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setLogoError('A imagem selecionada excede 5 MB. Escolha um arquivo menor.');
+        return;
+      }
+
+      try {
+        const dataUrl = await convertLogoFileToBase64(file);
+        const cleanName = file.name.replace(/\.[^.]+$/, '') || 'Logo personalizada';
+        const newLogo: LogoOption = {
+          id: `custom-logo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: cleanName,
+          dataUrl,
+          isBuiltIn: false,
+          addedAt: new Date().toISOString(),
+        };
+        const updated = [...customLogos, newLogo];
+        setCustomLogos(updated);
+        saveCustomLogos(updated);
+        setConfig((prev) => ({
+          ...prev,
+          selectedLogoId: newLogo.id,
+          logoBase64: newLogo.dataUrl,
+        }));
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro ao processar a logo enviada.';
+        setLogoError(msg);
+      }
+    },
+    [customLogos]
+  );
+
+  const handleDeleteLogo = useCallback(
+    (logoId: string) => {
+      setLogoError(null);
+      const updated = customLogos.filter((l) => l.id !== logoId);
+      setCustomLogos(updated);
+      saveCustomLogos(updated);
+
+      if (config.selectedLogoId === logoId) {
+        setConfig((prev) => ({
+          ...prev,
+          selectedLogoId: DEFAULT_LOGO_ID,
+          logoBase64: defaultLogoBase64,
+        }));
+      }
+    },
+    [customLogos, config.selectedLogoId, defaultLogoBase64]
+  );
 
   const syncHiddenColumnsFromHeaders = useCallback((headers: ColumnDefinition[]) => {
     const nextHidden = headers.filter((h) => !h.visible).map((h) => h.label);
@@ -277,23 +473,103 @@ export default function App() {
   const filteredRows = useMemo(() => {
     if (!dataset) return [];
 
+    const statusColKey = findColumnKeyByKeyword(dataset.headers, ['STATUS', 'SITUACAO']);
+    const numColKey = findColumnKeyByKeyword(dataset.headers, ['NÚMERO', 'NUMERO', 'NUM']);
+    const natureColKey = findColumnKeyByKeyword(dataset.headers, ['NATUREZA']);
+    const munColKey = findColumnKeyByKeyword(dataset.headers, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE']);
+    const factColKey = findColumnKeyByKeyword(dataset.headers, ['DATA FATO', 'FATO']);
+    const regColKey = findColumnKeyByKeyword(dataset.headers, ['DATA REGISTRO', 'REGISTRO']);
+
+    const occFilter = config.filterOccurrence.trim().toLowerCase();
+    const natureFilter = config.filterNature.trim().toLowerCase();
+    const globalFilter = config.searchQuery.trim().toLowerCase();
+
+    const startMs = config.filterStartDateTime
+      ? parseOccurrenceDateToMs(config.filterStartDateTime)
+      : null;
+    const endMs = config.filterEndDateTime
+      ? parseOccurrenceDateToMs(config.filterEndDateTime)
+      : null;
+    const hasDateFilter = startMs !== null || endMs !== null;
+
     return dataset.rows.filter((row) => {
-      if (config.filterStatus !== 'all') {
-        const statusCol = dataset.headers.find((h) => h.label.toUpperCase().includes('STATUS'));
-        if (statusCol && row[statusCol.key]?.trim() !== config.filterStatus) {
+      if (config.filterStatus !== 'all' && statusColKey) {
+        if ((row[statusColKey] || '').trim() !== config.filterStatus) {
           return false;
         }
       }
 
-      if (config.searchQuery.trim()) {
-        const q = config.searchQuery.toLowerCase();
-        const matches = Object.values(row).some((val) => val.toLowerCase().includes(q));
+      if (config.filterMunicipality !== 'all' && munColKey) {
+        if ((row[munColKey] || '').trim() !== config.filterMunicipality) {
+          return false;
+        }
+      }
+
+      if (occFilter) {
+        const val = numColKey
+          ? (row[numColKey] || '').toLowerCase()
+          : Object.values(row).join(' ').toLowerCase();
+        if (!val.includes(occFilter)) {
+          return false;
+        }
+      }
+
+      if (natureFilter) {
+        const val = natureColKey
+          ? (row[natureColKey] || '').toLowerCase()
+          : Object.values(row).join(' ').toLowerCase();
+        if (!val.includes(natureFilter)) {
+          return false;
+        }
+      }
+
+      if (hasDateFilter) {
+        const colsToCheck: string[] = [];
+        if (config.filterDateField === 'fact' && factColKey) {
+          colsToCheck.push(factColKey);
+        } else if (config.filterDateField === 'register' && regColKey) {
+          colsToCheck.push(regColKey);
+        } else {
+          if (factColKey) colsToCheck.push(factColKey);
+          if (regColKey) colsToCheck.push(regColKey);
+        }
+
+        const timestamps = colsToCheck
+          .map((k) => parseOccurrenceDateToMs(row[k] || ''))
+          .filter((ms): ms is number => ms !== null);
+
+        if (timestamps.length === 0) {
+          return false;
+        }
+
+        const matchesRange = timestamps.some(
+          (ts) => (startMs === null || ts >= startMs) && (endMs === null || ts <= endMs)
+        );
+        if (!matchesRange) {
+          return false;
+        }
+      }
+
+      if (globalFilter) {
+        const matches = Object.values(row).some((val) =>
+          (val || '').toLowerCase().includes(globalFilter)
+        );
         if (!matches) return false;
       }
 
       return true;
     });
-  }, [dataset, config.filterStatus, config.searchQuery]);
+  }, [
+    dataset,
+    config.filterStatus,
+    config.filterMunicipality,
+    config.filterOccurrence,
+    config.filterNature,
+    config.filterDateField,
+    config.filterStartDateTime,
+    config.filterEndDateTime,
+    config.searchQuery,
+  ]);
 
   const classifications = useMemo(() => {
     if (!dataset) return [];
@@ -388,15 +664,18 @@ export default function App() {
         <div className="bg-slate-900 text-white rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs text-slate-300">
-              <span className="font-mono font-semibold text-sky-400">4º BBM · Plantão Operacional</span>
+              <span className="font-mono font-semibold text-sky-400">
+                4º BBM · Plantão Operacional
+              </span>
               <span aria-hidden="true">·</span>
-              <span>Configurações salvas automaticamente neste navegador</span>
+              <span>Configurações e logos salvas automaticamente neste navegador</span>
             </div>
             <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white">
               Gerador de Relatório de Ocorrências em PDF
             </h1>
             <p className="text-xs text-slate-300 max-w-3xl">
-              Cole os dados copiados da página de ocorrências, ajuste a Ala de Serviço (A, B, C ou D) e o intervalo de data/hora, confirme a natureza predominante quando necessário e baixe o PDF com o Quadro Resumo.
+              Cole uma ou várias páginas de ocorrências, escolha a Ala de Serviço (A, B, C ou D),
+              ajuste o logotipo e os filtros e gere o PDF com Quadro Resumo operacional e Produtividade.
             </p>
           </div>
 
@@ -423,9 +702,10 @@ export default function App() {
           </div>
         </div>
 
-        {/* 1. Colar Dados das Ocorrências */}
+        {/* 1. Colar Dados das Ocorrências (Página Única ou Multipágina) */}
         <UploadSection
           onProcessInput={handleProcessInput}
+          onProcessMultiPage={handleProcessMultiPage}
           onClearData={handleClearData}
           isProcessing={isProcessing}
           errorMessage={errorMessage}
@@ -437,6 +717,11 @@ export default function App() {
         <ConfigPanel
           config={config}
           columns={activePanelColumns}
+          logos={allLogos}
+          onSelectLogo={handleSelectLogo}
+          onUploadLogo={handleUploadLogo}
+          onDeleteLogo={handleDeleteLogo}
+          logoError={logoError}
           onChangeConfig={handleChangeConfig}
           onToggleColumn={handleToggleColumn}
           onToggleAllColumns={handleToggleAllColumns}
@@ -447,7 +732,7 @@ export default function App() {
           hasData={Boolean(dataset)}
         />
 
-        {/* 3. Classificação & Natureza Predominante */}
+        {/* 3. Classificação, Natureza Predominante & Produtividade */}
         {dataset && (
           <NatureClassificationPanel
             allRows={dataset.rows}
@@ -492,8 +777,9 @@ export default function App() {
                 </button>
               </div>
 
-              <span className="text-xs text-slate-500 font-mono">
-                Ala {config.serviceWing} · {filteredRows.length} ocorrência(s) · {summary.byGroup.length} grupo(s) no resumo
+              <span className="text-xs text-slate-500 font-mono tabular-nums">
+                Ala {config.serviceWing} · {filteredRows.length} atendimento(s) ·{' '}
+                {summary.totalConcurrentNatures} natureza(s) · {summary.byGroup.length} grupo(s)
               </span>
             </div>
 
@@ -510,10 +796,10 @@ export default function App() {
             ) : (
               <DataTable
                 dataset={dataset}
-                searchQuery={config.searchQuery}
-                onSearchChange={(q) => handleChangeConfig({ searchQuery: q })}
-                statusFilter={config.filterStatus}
-                onStatusFilterChange={(s) => handleChangeConfig({ filterStatus: s })}
+                filteredRows={filteredRows}
+                config={config}
+                onChangeConfig={handleChangeConfig}
+                onClearFilters={handleClearFilters}
                 onOpenPdfPreview={handleOpenPdfPreview}
                 onDownloadPdf={handleDownloadPdf}
                 isGeneratingPdf={isGeneratingPdf}
@@ -533,7 +819,7 @@ export default function App() {
                 Sigilo Operacional e Hospedagem Estática (GitHub Pages)
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Todo o processamento ocorre exclusivamente no navegador do operador (arquitetura 100% client-side, sem backend). Os dados das ocorrências nunca são enviados a servidores externos, e apenas as preferências de cabeçalho/colunas ficam armazenadas localmente no seu navegador.
+                Todo o processamento ocorre exclusivamente no navegador do operador (arquitetura 100% client-side, sem backend). Os dados das ocorrências nunca são enviados a servidores externos, e suas configurações, colunas e logos enviadas ficam armazenadas apenas localmente no seu navegador.
               </p>
             </div>
           </div>
@@ -544,7 +830,9 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <span>Sistema de Relatórios Operacionais — 4º BBM</span>
           <div className="flex items-center gap-3">
-            <span>Orientação: {config.orientation === 'landscape' ? 'Paisagem (A4)' : 'Retrato (A4)'}</span>
+            <span>
+              Orientação: {config.orientation === 'landscape' ? 'Paisagem (A4)' : 'Retrato (A4)'}
+            </span>
             <span>·</span>
             <span>Motor: pdfmake v0.2.10</span>
           </div>

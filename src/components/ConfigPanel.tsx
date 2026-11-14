@@ -7,13 +7,20 @@ import {
   Download,
   ShieldCheck,
   CalendarClock,
+  ImagePlus,
+  Trash2,
 } from 'lucide-react';
-import { ColumnDefinition, ReportConfig, ServiceWing } from '../types/occurrence';
-import { FIXED_LOGO_URL } from '../utils/sampleData';
+import { ColumnDefinition, LogoOption, ReportConfig, ServiceWing } from '../types/occurrence';
+import { DEFAULT_LOGO_ID, FIXED_LOGO_URL } from '../utils/sampleData';
 
 interface ConfigPanelProps {
   config: ReportConfig;
   columns: ColumnDefinition[];
+  logos: LogoOption[];
+  onSelectLogo: (logoId: string) => void;
+  onUploadLogo: (file: File) => void;
+  onDeleteLogo: (logoId: string) => void;
+  logoError?: string | null;
   onChangeConfig: (newConfig: Partial<ReportConfig>) => void;
   onToggleColumn: (key: string) => void;
   onToggleAllColumns: (visible: boolean) => void;
@@ -29,6 +36,11 @@ const SERVICE_WINGS: ServiceWing[] = ['A', 'B', 'C', 'D'];
 export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   config,
   columns,
+  logos,
+  onSelectLogo,
+  onUploadLogo,
+  onDeleteLogo,
+  logoError,
   onChangeConfig,
   onToggleColumn,
   onToggleAllColumns,
@@ -38,8 +50,10 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   isGeneratingPdf,
   hasData,
 }) => {
+  const logoFileInputRef = React.useRef<HTMLInputElement>(null);
   const visibleColumnsCount = columns.filter((c) => c.visible).length;
   const isPdfDisabled = !hasData || isGeneratingPdf || visibleColumnsCount === 0;
+  const activeLogoOption = logos.find((l) => l.id === config.selectedLogoId) || logos[0];
 
   return (
     <div id="configuracao" className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-xs space-y-6">
@@ -105,25 +119,108 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Coluna Esquerda (4 cols): Logo Institucional Fixa + Ala de Serviço + Orientação */}
         <div className="lg:col-span-5 bg-slate-50/70 border border-slate-200 rounded-xl p-4 space-y-4">
-          {/* Logotipo Institucional Fixo */}
-          <div className="flex items-center gap-3.5 pb-3.5 border-b border-slate-200">
-            <div className="w-14 h-14 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-2xs">
-              <img
-                src={config.logoBase64 || FIXED_LOGO_URL}
-                alt="Brasão Institucional Oficial"
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-contain"
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span className="text-xs font-bold text-slate-900 truncate">
-                  Brasão Institucional Oficial
-                </span>
+          {/* Seletor e Upload de Logotipo */}
+          <div className="pb-4 border-b border-slate-200 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-14 h-14 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-2xs">
+                  <img
+                    src={config.logoBase64 || activeLogoOption?.dataUrl || FIXED_LOGO_URL}
+                    alt={activeLogoOption?.name || 'Logotipo do Relatório'}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="text-xs font-bold text-slate-900 truncate">
+                      Logotipo do Relatório
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 truncate mt-0.5">
+                    {activeLogoOption?.name || 'Brasão Oficial 4º BBM (Padrão)'}
+                  </p>
+                </div>
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                Logotipo padrão aplicado automaticamente no cabeçalho de todas as páginas do relatório.
+
+              <input
+                ref={logoFileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onUploadLogo(file);
+                  e.target.value = '';
+                }}
+                className="hidden"
+              />
+
+              <button
+                type="button"
+                onClick={() => logoFileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+              >
+                <ImagePlus className="w-3.5 h-3.5 text-sky-700" />
+                <span>Nova Logo</span>
+              </button>
+            </div>
+
+            {logoError && (
+              <p className="text-[11px] text-rose-700 font-medium">{logoError}</p>
+            )}
+
+            {/* Galeria de Logos Disponíveis */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-slate-600 block">
+                Selecionar logo salva ({logos.length})
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-0.5">
+                {logos.map((logo) => {
+                  const isSelected = (config.selectedLogoId || DEFAULT_LOGO_ID) === logo.id;
+                  return (
+                    <div
+                      key={logo.id}
+                      className={`flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg border transition-colors ${
+                        isSelected
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onSelectLogo(logo.id)}
+                        className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
+                      >
+                        <img
+                          src={logo.dataUrl || logo.sourceUrl || FIXED_LOGO_URL}
+                          alt={logo.name}
+                          referrerPolicy="no-referrer"
+                          className="w-6 h-6 object-contain rounded bg-white p-0.5 shrink-0"
+                        />
+                        <span className="text-[11px] font-medium truncate">{logo.name}</span>
+                      </button>
+
+                      {!logo.isBuiltIn && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteLogo(logo.id)}
+                          title="Remover logo salva"
+                          className={`p-1 rounded transition-colors cursor-pointer shrink-0 ${
+                            isSelected
+                              ? 'text-slate-300 hover:text-rose-300'
+                              : 'text-slate-400 hover:text-rose-600'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-slate-500 leading-snug">
+                As logos enviadas ficam salvas localmente neste navegador. O GitHub Pages estático não grava arquivos direto no repositório sem autenticação.
               </p>
             </div>
           </div>

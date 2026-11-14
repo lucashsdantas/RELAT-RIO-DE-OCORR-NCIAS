@@ -456,3 +456,146 @@ export function parseOccurrenceInput(
       'Formato não reconhecido. Selecione as linhas (ou a tabela inteira) na página de ocorrências, copie com Ctrl+C e cole diretamente no campo acima.',
   };
 }
+
+export interface MultiPageInputChunk {
+  rawText: string;
+  clipboardHtml?: string;
+  label?: string;
+}
+
+/**
+ * Processa múltiplas páginas/blocos colados em um único dataset consolidado,
+ * somando todas as ocorrências em um processamento único.
+ */
+export function parseMultiPageOccurrenceInputs(pages: MultiPageInputChunk[]): ParseResult {
+  const nonEmptyPages = pages.filter((p) => p.rawText.trim() || (p.clipboardHtml || '').trim());
+  if (nonEmptyPages.length === 0) {
+    return {
+      success: false,
+      errorMessage: 'Nenhum dado foi colado nas páginas. Cole ao menos uma página de ocorrências.',
+    };
+  }
+
+  if (nonEmptyPages.length === 1) {
+    const single = nonEmptyPages[0];
+    return parseOccurrenceInput(single.rawText, single.clipboardHtml, single.label || 'Página 1');
+  }
+
+  const parsedDatasets: { dataset: OccurrenceDataset; pageLabel: string }[] = [];
+  const collectedWarnings: string[] = [];
+
+  for (let i = 0; i < nonEmptyPages.length; i++) {
+    const chunk = nonEmptyPages[i];
+    const pageLabel = chunk.label || `Página ${i + 1}`;
+    const res = parseOccurrenceInput(chunk.rawText, chunk.clipboardHtml, pageLabel);
+
+    if (!res.success || !res.dataset) {
+      return {
+        success: false,
+        errorMessage: `Erro na ${pageLabel}: ${res.errorMessage || 'não foi possível extrair a tabela.'}`,
+      };
+    }
+
+    parsedDatasets.push({ dataset: res.dataset, pageLabel });
+    if (res.warnings && res.warnings.length > 0) {
+      res.warnings.forEach((w) => collectedWarnings.push(`${pageLabel}: ${w}`));
+    }
+  }
+
+  const baseHeaders: ColumnDefinition[] = parsedDatasets[0].dataset.headers.map((h) => ({ ...h }));
+  const mergedRows: OccurrenceRow[] = [];
+
+  for (const { dataset } of parsedDatasets) {
+    const labelToBaseKey = new Map<string, string>();
+    baseHeaders.forEach((bh) => {
+      labelToBaseKey.set(bh.label.toUpperCase(), bh.key);
+    });
+
+    // Garante eventuais colunas extras que existam apenas em páginas posteriores
+    dataset.headers.forEach((dh) => {
+      const upper = dh.label.toUpperCase();
+      if (!labelToBaseKey.has(upper)) {
+        const newKey = `col_${baseHeaders.length}`;
+        baseHeaders.push({
+          key: newKey,
+          label: dh.label,
+          visible: dh.visible,
+          isStandard: dh.isStandard,
+        });
+        labelToBaseKey.set(upper, newKey);
+      }
+    });
+
+    for (const row of dataset.rows) {
+      const alignedRow: OccurrenceRow = {};
+      baseHeaders.forEach((bh) => {
+        alignedRow[bh.key] = '';
+      });
+      dataset.headers.forEach((dh) => {
+        const targetKey = labelToBaseKey.get(dh.label.toUpperCase());
+        if (targetKey) {
+          alignedRow[targetKey] = row[dh.key] || '';
+        }
+      });
+      mergedRows.push(alignedRow);
+    }
+  }
+
+  const summaryBreakdown = parsedDatasets
+    .map((p) => `${p.pageLabel}: ${p.dataset.rows.length}`)
+    .join(' · ');
+
+  return {
+    success: true,
+    dataset: {
+      headers: baseHeaders,
+      rows: mergedRows,
+      extractedAt: new Date(),
+      sourceName: `Multipágina (${parsedDatasets.length} páginas: ${summaryBreakdown})`,
+      detectedFormat: parsedDatasets[0].dataset.detectedFormat,
+      totalRows: mergedRows.length,
+    },
+    warnings: collectedWarnings,
+  };
+}
+
+/**
+ * Converte data/hora brasileira (DD/MM/AAAA HH:mm[:ss]) ou ISO (YYYY-MM-DD[T ]HH:mm) em timestamp local
+ */
+export function parseOccurrenceDateToMs(rawValue: string): number | null {
+  const trimmed = (rawValue || '').trim();
+  if (!trimmed) return null;
+
+  // Formato DD/MM/YYYY [HH:mm[:ss]]
+  const brMatch = trimmed.match(
+    /^(\d{2})\/(\d{2})\/(\d{4})(?:\s*(?:às|-|T)?\s*(\d{2}):(\d{2})(?::(\d{2}))?)?/i
+  );
+  if (brMatch) {
+    const day = Number(brMatch[1]);
+    const month = Number(brMatch[2]) - 1;
+    const year = Number(brMatch[3]);
+    const hour = brMatch[4] ? Number(brMatch[4]) : 0;
+    const min = brMatch[5] ? Number(brMatch[5]) : 0;
+    const sec = brMatch[6] ? Number(brMatch[6]) : 0;
+    const dt = new Date(year, month, day, hour, min, sec, 0);
+    return Number.isNaN(dt.getTime()) ? null : dt.getTime();
+  }
+
+  // Formato ISO YYYY-MM-DD [HH:mm[:ss]]
+  const isoMatch = trimmed.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]+(\d{2}):(\d{2})(?::(\d{2}))?)?/
+  );
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+    const hour = isoMatch[4] ? Number(isoMatch[4]) : 0;
+    const min = isoMatch[5] ? Number(isoMatch[5]) : 0;
+    const sec = isoMatch[6] ? Number(isoMatch[6]) : 0;
+    const dt = new Date(year, month, day, hour, min, sec, 0);
+    return Number.isNaN(dt.getTime()) ? null : dt.getTime();
+  }
+
+  return null;
+}
+
