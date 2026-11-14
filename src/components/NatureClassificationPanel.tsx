@@ -71,12 +71,12 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
     ).slice(0, 100);
   }, [catalogSearch]);
 
-  const needsActionCount = summary.multiplePendingCount + summary.unclassifiedCount;
+  const needsActionCount = summary.unclassifiedCount;
   const hasAnyOverride = Object.keys(overrides).length > 0;
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
-      {/* Cabeçalho do Painel de Conciliação */}
+      {/* Cabeçalho do Painel de Classificação */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div className="flex items-start gap-3">
           <div
@@ -95,20 +95,20 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm sm:text-base font-bold text-slate-900">
-                3. Definição da Natureza Predominante &amp; Conciliação do Resumo
+                3. Conferência das Naturezas Detectadas &amp; Produtividade
               </h3>
               <span className="text-xs font-mono text-slate-500">
-                {summary.totalOccurrences} atendimentos · {summary.totalConcurrentNatures} naturezas operacionais
+                {summary.totalOccurrences} atendimentos (RAIs) · {summary.totalConcurrentNatures} naturezas atendidas
                 {summary.productivityTotalCount > 0 ? ` · ${summary.productivityTotalCount} produtividade` : ''}
               </span>
             </div>
             <p className="text-xs text-slate-600 mt-0.5">
               {needsActionCount > 0 ? (
                 <>
-                  Existem <strong className="text-amber-800">{needsActionCount} ocorrência(s)</strong> com múltiplas naturezas ou sem classificação automática. Defina a natureza predominante para que o quantitativo total coincida com exatidão.
+                  Existem <strong className="text-amber-800">{needsActionCount} ocorrência(s)</strong> sem classificação automática no catálogo. Selecione a natureza correspondente abaixo. Ocorrências com duas ou mais naturezas têm todas contabilizadas nas tabelas.
                 </>
               ) : (
-                'Todas as ocorrências possuem uma única natureza definida e conciliada para o Quadro Resumo abaixo do relatório.'
+                `Número de atendimentos foi ${summary.totalOccurrences} (RAIs registrados), enquanto houveram ${summary.totalConcurrentNatures} naturezas atendidas. Todas as ocorrências com mais de uma natureza tiveram todas as naturezas contabilizadas no Quadro Resumo.`
               )}
             </p>
           </div>
@@ -134,7 +134,7 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
             {showAllRows ? (
               <>
                 <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
-                <span>Mostrar Apenas Pendências ({attentionRows.length})</span>
+                <span>Mostrar Apenas Multi-natureza / Pendências ({attentionRows.length})</span>
               </>
             ) : (
               <>
@@ -146,7 +146,7 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
         </div>
       </div>
 
-      {/* Lista de Ocorrências para Definição/Revisão */}
+      {/* Lista de Ocorrências para Conferência/Ajuste */}
       {displayedRows.length > 0 ? (
         <div className="divide-y divide-slate-200 border border-slate-200 rounded-xl overflow-hidden">
           {displayedRows.map((item) => {
@@ -160,8 +160,8 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                 className={`p-4 space-y-2.5 ${
                   item.isUnclassified
                     ? 'bg-rose-50/40'
-                    : item.hasMultipleCandidates && !item.isManuallyOverridden
-                    ? 'bg-amber-50/50'
+                    : item.hasMultipleCandidates
+                    ? 'bg-sky-50/40'
                     : 'bg-white'
                 }`}
               >
@@ -169,16 +169,16 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="font-mono font-bold text-slate-900">
-                        Ocorrência {occNumber}
+                        RAI / Ocorrência {occNumber}
                       </span>
                       <span className="text-slate-300">·</span>
                       {item.isUnclassified ? (
                         <span className="font-semibold text-rose-700">
                           Não localizada automaticamente — selecione no catálogo
                         </span>
-                      ) : item.hasMultipleCandidates && !item.isManuallyOverridden ? (
-                        <span className="font-semibold text-amber-800">
-                          {item.operationalCandidates.length > 1 ? item.operationalCandidates.length : item.candidates.length} naturezas concorrentes — confirme a predominante
+                      ) : item.hasMultipleCandidates ? (
+                        <span className="font-semibold text-sky-800">
+                          {item.operationalCandidates.length > 1 ? item.operationalCandidates.length : item.candidates.length} naturezas identificadas — todas somadas nas tabelas
                         </span>
                       ) : item.isExclusiveProductivity ? (
                         <span className="font-semibold text-sky-800">
@@ -187,7 +187,7 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                       ) : item.isManuallyOverridden ? (
                         <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          Predominante definida manualmente
+                          Classificação ajustada manualmente
                         </span>
                       ) : (
                         <span className="text-slate-600">Classificação automática</span>

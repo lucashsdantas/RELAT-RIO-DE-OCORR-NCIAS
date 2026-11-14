@@ -77,10 +77,10 @@ function loadSavedConfig(defaultRange: { start: string; end: string }): ReportCo
     compactMode: false,
     confidentialityText:
       'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE VIA SISTEMA DE RELATÓRIOS',
-    filterStatus: 'all',
-    filterOccurrence: '',
-    filterNature: '',
-    filterMunicipality: 'all',
+    filterStatuses: [],
+    filterOccurrences: [],
+    filterNatures: [],
+    filterMunicipalities: [],
     filterDateField: 'any',
     filterStartDateTime: '',
     filterEndDateTime: '',
@@ -96,10 +96,10 @@ function loadSavedConfig(defaultRange: { start: string; end: string }): ReportCo
       ...parsed,
       selectedLogoId: parsed.selectedLogoId || DEFAULT_LOGO_ID,
       logoBase64: null,
-      filterStatus: 'all',
-      filterOccurrence: '',
-      filterNature: '',
-      filterMunicipality: 'all',
+      filterStatuses: [],
+      filterOccurrences: [],
+      filterNatures: [],
+      filterMunicipalities: [],
       filterDateField: 'any',
       filterStartDateTime: '',
       filterEndDateTime: '',
@@ -298,10 +298,10 @@ export default function App() {
   const handleClearFilters = useCallback(() => {
     setConfig((prev) => ({
       ...prev,
-      filterStatus: 'all',
-      filterOccurrence: '',
-      filterNature: '',
-      filterMunicipality: 'all',
+      filterStatuses: [],
+      filterOccurrences: [],
+      filterNatures: [],
+      filterMunicipalities: [],
       filterDateField: 'any',
       filterStartDateTime: '',
       filterEndDateTime: '',
@@ -480,8 +480,10 @@ export default function App() {
     const factColKey = findColumnKeyByKeyword(dataset.headers, ['DATA FATO', 'FATO']);
     const regColKey = findColumnKeyByKeyword(dataset.headers, ['DATA REGISTRO', 'REGISTRO']);
 
-    const occFilter = config.filterOccurrence.trim().toLowerCase();
-    const natureFilter = config.filterNature.trim().toLowerCase();
+    const selectedStatuses = new Set(config.filterStatuses);
+    const selectedMunicipalities = new Set(config.filterMunicipalities);
+    const selectedOccurrences = new Set(config.filterOccurrences);
+    const selectedNatures = new Set(config.filterNatures);
     const globalFilter = config.searchQuery.trim().toLowerCase();
 
     const startMs = config.filterStartDateTime
@@ -493,32 +495,33 @@ export default function App() {
     const hasDateFilter = startMs !== null || endMs !== null;
 
     return dataset.rows.filter((row) => {
-      if (config.filterStatus !== 'all' && statusColKey) {
-        if ((row[statusColKey] || '').trim() !== config.filterStatus) {
+      if (selectedStatuses.size > 0 && statusColKey) {
+        if (!selectedStatuses.has((row[statusColKey] || '').trim())) {
           return false;
         }
       }
 
-      if (config.filterMunicipality !== 'all' && munColKey) {
-        if ((row[munColKey] || '').trim() !== config.filterMunicipality) {
+      if (selectedMunicipalities.size > 0 && munColKey) {
+        if (!selectedMunicipalities.has((row[munColKey] || '').trim())) {
           return false;
         }
       }
 
-      if (occFilter) {
-        const val = numColKey
-          ? (row[numColKey] || '').toLowerCase()
-          : Object.values(row).join(' ').toLowerCase();
-        if (!val.includes(occFilter)) {
+      if (selectedOccurrences.size > 0 && numColKey) {
+        if (!selectedOccurrences.has((row[numColKey] || '').trim())) {
           return false;
         }
       }
 
-      if (natureFilter) {
-        const val = natureColKey
-          ? (row[natureColKey] || '').toLowerCase()
-          : Object.values(row).join(' ').toLowerCase();
-        if (!val.includes(natureFilter)) {
+      if (selectedNatures.size > 0 && natureColKey) {
+        const raw = (row[natureColKey] || '').trim();
+        const parts = raw
+          .split(/[;|\n+]+/)
+          .map((p) => p.trim())
+          .filter(Boolean);
+        const matchesAnyNature =
+          selectedNatures.has(raw) || parts.some((p) => selectedNatures.has(p));
+        if (!matchesAnyNature) {
           return false;
         }
       }
@@ -561,10 +564,10 @@ export default function App() {
     });
   }, [
     dataset,
-    config.filterStatus,
-    config.filterMunicipality,
-    config.filterOccurrence,
-    config.filterNature,
+    config.filterStatuses,
+    config.filterMunicipalities,
+    config.filterOccurrences,
+    config.filterNatures,
     config.filterDateField,
     config.filterStartDateTime,
     config.filterEndDateTime,
@@ -778,8 +781,8 @@ export default function App() {
               </div>
 
               <span className="text-xs text-slate-500 font-mono tabular-nums">
-                Ala {config.serviceWing} · {filteredRows.length} atendimento(s) ·{' '}
-                {summary.totalConcurrentNatures} natureza(s) · {summary.byGroup.length} grupo(s)
+                Ala {config.serviceWing} · {filteredRows.length} atendimento(s) (RAIs) ·{' '}
+                {summary.totalConcurrentNatures} natureza(s) atendida(s) · {summary.byGroup.length} grupo(s)
               </span>
             </div>
 

@@ -125,9 +125,8 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
   const groupBody: any[] = [
     [
       { text: 'GRUPO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
-      { text: 'ATEND. (PREDOM.)', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
-      { text: 'TOTAL NATUREZAS', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
-      { text: '% NAT.', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: 'NATUREZAS ATENDIDAS', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: '%', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
     ],
   ];
 
@@ -135,15 +134,13 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
     const fill = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
     groupBody.push([
       { text: g.group, style: 'tableCell', fillColor: fill, bold: true, color: '#0F172A' },
-      { text: String(g.count), style: 'tableCell', fillColor: fill, bold: true, alignment: 'center', color: '#0F172A' },
-      { text: String(g.concurrentCount), style: 'tableCell', fillColor: fill, bold: true, alignment: 'center', color: '#0369A1' },
+      { text: String(g.concurrentCount), style: 'tableCell', fillColor: fill, bold: true, alignment: 'center', color: '#0F172A' },
       { text: pct(g.concurrentPercentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
     ]);
   });
 
   groupBody.push([
-    { text: 'TOTAL GERAL POR GRUPO', style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
-    { text: String(summary.totalOccurrences), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
+    { text: 'TOTAL DE NATUREZAS ATENDIDAS POR GRUPO', style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
     { text: String(summary.totalConcurrentNatures), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
     { text: summary.totalConcurrentNatures > 0 ? '100,0%' : '0,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
   ]);
@@ -155,9 +152,8 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
       { text: 'CÓDIGO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
       { text: 'SUB-GRUPO', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
       { text: 'NATUREZA', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'left' },
-      { text: 'ATEND.', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
-      { text: 'NATUREZAS', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
-      { text: '% NAT.', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: 'NATUREZAS ATENDIDAS', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
+      { text: '%', style: 'tableHeader', fillColor: '#0F172A', color: '#FFFFFF', alignment: 'center' },
     ],
   ];
 
@@ -169,8 +165,7 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
         { text: n.code, style: 'tableCell', fillColor: fill, alignment: 'center', color: '#0F172A', bold: true },
         { text: n.subGroup, style: 'tableCell', fillColor: fill, color: '#334155' },
         { text: n.nature, style: 'tableCell', fillColor: fill, color: '#0F172A' },
-        { text: String(n.count), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
-        { text: String(n.concurrentCount), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0369A1' },
+        { text: String(n.concurrentCount), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
         { text: pct(n.concurrentPercentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
       ]);
     });
@@ -188,18 +183,23 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
       {},
       {},
       {},
-      { text: String(block.subtotalCount), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
       { text: String(block.subtotalConcurrentCount), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
       { text: pct(block.subtotalConcurrentPercentage), style: 'tableCell', fillColor: '#F1F5F9', bold: true, alignment: 'center', color: '#0F172A' },
     ]);
   });
 
   natureBody.push([
-    { text: 'TOTAL GERAL (ATENDIMENTOS × NATUREZAS)', colSpan: 4, style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
+    {
+      text: `TOTAL GERAL DE NATUREZAS ATENDIDAS (RAIs registrados: ${summary.totalOccurrences})`,
+      colSpan: 4,
+      style: 'tableCell',
+      fillColor: '#E2E8F0',
+      bold: true,
+      color: '#0F172A',
+    },
     {},
     {},
     {},
-    { text: String(summary.totalOccurrences), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
     { text: String(summary.totalConcurrentNatures), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
     { text: summary.totalConcurrentNatures > 0 ? '100,0%' : '0,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
   ]);
@@ -215,28 +215,35 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
     paddingBottom: () => 3,
   };
 
+  const raiSummaryText =
+    `Número de atendimentos foi ${summary.totalOccurrences}, dado pelo número de RAIs registrados, enquanto houveram ${summary.totalConcurrentNatures} naturezas atendidas.` +
+    (summary.multiNatureOccurrencesCount > 0
+      ? ` (${summary.multiNatureOccurrencesCount} ocorrência(s) possuíam mais de uma natureza e todas foram mencionadas e contabilizadas abaixo.)`
+      : '');
+
   const blocks: any[] = [
     {
       margin: [0, 16, 0, 6],
       unbreakable: true,
       stack: [
         {
-          text: 'QUADRO RESUMO — QUANTITATIVO DE ATENDIMENTOS E NATUREZAS',
+          text: 'QUADRO RESUMO — QUANTITATIVO DE NATUREZAS ATENDIDAS',
           fontSize: 9.5,
           bold: true,
           color: '#0F172A',
         },
         {
-          text: `Total de Atendimentos (Ocorrências): ${summary.totalOccurrences} | Total de Naturezas (incl. concorrentes): ${summary.totalConcurrentNatures}`,
-          fontSize: 7,
-          color: '#475569',
-          margin: [0, 1, 0, 6],
+          text: raiSummaryText,
+          fontSize: 7.5,
+          bold: true,
+          color: '#0369A1',
+          margin: [0, 2, 0, 6],
         },
         {
           table: {
             headerRows: 1,
             dontBreakRows: true,
-            widths: isLandscape ? [230, 72, 72, 48] : ['*', 62, 62, 40],
+            widths: isLandscape ? [240, 110, 48] : ['*', 95, 40],
             body: groupBody,
           },
           layout: summaryTableLayout,
@@ -248,7 +255,7 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
       table: {
         headerRows: 1,
         dontBreakRows: true,
-        widths: isLandscape ? [115, 44, 105, '*', 42, 48, 38] : [82, 38, 72, '*', 32, 38, 30],
+        widths: isLandscape ? [120, 46, 110, '*', 90, 38] : [86, 38, 76, '*', 76, 32],
         body: natureBody,
       },
       layout: summaryTableLayout,
@@ -559,7 +566,7 @@ export function buildPdfDocDefinition(
                     margin: [0, 2, 0, 1],
                   },
                   {
-                    text: `Total de Ocorrências: ${totalCount}`,
+                    text: `Atendimentos (RAIs): ${totalCount} | Naturezas: ${summary ? summary.totalConcurrentNatures : totalCount}`,
                     fontSize: 7,
                     bold: true,
                     color: '#0369A1',

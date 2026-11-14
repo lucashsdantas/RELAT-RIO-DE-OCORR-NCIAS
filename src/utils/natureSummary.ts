@@ -224,24 +224,20 @@ export function buildOccurrenceSummary(
       }).count += 1;
     }
 
-    // 3. Contabilização de Todas as Naturezas Concorrentes no Quadro Principal
-    //    - Se houver naturezas operacionais detectadas (não-Produtividade), conta todas elas (ex: Incêndio + Resgate = 2).
-    //    - Se a ocorrência for exclusiva de Produtividade, conta a(s) natureza(s) de Produtividade detectada(s).
-    //    - Se o operador selecionou manualmente uma natureza que não estava nas detectadas, garante que ela seja contada.
+    // 3. Contabilização de Todas as Naturezas Atendidas no Quadro Principal
+    //    - Se houver 2+ naturezas operacionais detectadas (não-Produtividade), todas são contabilizadas (ex: Incêndio + Resgate = 2).
+    //    - Se houver 0 ou 1 natureza operacional e o operador escolheu manualmente uma natureza no catálogo, respeita a escolha manual.
+    //    - Se a ocorrência for exclusiva de Produtividade, contabiliza a(s) natureza(s) de Produtividade detectada(s).
     const concurrentList: NatureCatalogEntry[] =
-      item.operationalCandidates.length > 0
+      item.isManuallyOverridden && item.selectedEntry && item.operationalCandidates.length <= 1
+        ? [item.selectedEntry]
+        : item.operationalCandidates.length > 0
         ? [...item.operationalCandidates]
         : item.productivityEntries.length > 0
         ? [...item.productivityEntries]
         : item.selectedEntry
         ? [item.selectedEntry]
         : [];
-
-    if (item.selectedEntry && !concurrentList.some((e) => e.id === item.selectedEntry!.id)) {
-      if (concurrentList.length === 0) {
-        concurrentList.push(item.selectedEntry);
-      }
-    }
 
     if (concurrentList.length > 1) {
       multiNatureOccurrencesCount += 1;
@@ -281,19 +277,21 @@ export function buildOccurrenceSummary(
     .sort((a, b) => {
       if (a.group === 'NÃO CLASSIFICADO') return 1;
       if (b.group === 'NÃO CLASSIFICADO') return -1;
-      if (b.count !== a.count) return b.count - a.count;
       if (b.concurrentCount !== a.concurrentCount) return b.concurrentCount - a.concurrentCount;
+      if (b.count !== a.count) return b.count - a.count;
       return a.group.localeCompare(b.group, 'pt-BR');
     });
 
   const groupOrder = new Map(byGroup.map((g, i) => [g.group, i]));
 
-  const allNaturesWithPct: NatureSummaryRow[] = Array.from(natureCounts.values()).map((n) => ({
-    ...n,
-    percentage: totalOccurrences > 0 ? (n.count / totalOccurrences) * 100 : 0,
-    concurrentPercentage:
-      totalConcurrentNatures > 0 ? (n.concurrentCount / totalConcurrentNatures) * 100 : 0,
-  }));
+  const allNaturesWithPct: NatureSummaryRow[] = Array.from(natureCounts.values())
+    .filter((n) => n.concurrentCount > 0)
+    .map((n) => ({
+      ...n,
+      percentage: totalOccurrences > 0 ? (n.count / totalOccurrences) * 100 : 0,
+      concurrentPercentage:
+        totalConcurrentNatures > 0 ? (n.concurrentCount / totalConcurrentNatures) * 100 : 0,
+    }));
 
   // Agrupa por Grupo + Sub-grupo e calcula os subtotais de cada Sub-grupo
   const subGroupMap = new Map<string, SubGroupSummaryBlock>();
@@ -327,8 +325,8 @@ export function buildOccurrenceSummary(
           ? (block.subtotalConcurrentCount / totalConcurrentNatures) * 100
           : 0,
       items: block.items.sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
         if (b.concurrentCount !== a.concurrentCount) return b.concurrentCount - a.concurrentCount;
+        if (b.count !== a.count) return b.count - a.count;
         return a.code.localeCompare(b.code, 'pt-BR');
       }),
     }))
@@ -336,10 +334,10 @@ export function buildOccurrenceSummary(
       const gA = groupOrder.get(a.group) ?? 999;
       const gB = groupOrder.get(b.group) ?? 999;
       if (gA !== gB) return gA - gB;
-      if (b.subtotalCount !== a.subtotalCount) return b.subtotalCount - a.subtotalCount;
       if (b.subtotalConcurrentCount !== a.subtotalConcurrentCount) {
         return b.subtotalConcurrentCount - a.subtotalConcurrentCount;
       }
+      if (b.subtotalCount !== a.subtotalCount) return b.subtotalCount - a.subtotalCount;
       return a.subGroup.localeCompare(b.subGroup, 'pt-BR');
     });
 

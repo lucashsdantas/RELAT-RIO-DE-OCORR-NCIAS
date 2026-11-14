@@ -243,7 +243,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                   Gerado em: {generatedAt}
                 </div>
                 <div className="text-[11px] font-bold text-sky-700 font-mono tabular-nums">
-                  Atendimentos: {filteredRows.length} · Naturezas: {summary.totalConcurrentNatures}
+                  Atendimentos (RAIs): {filteredRows.length} · Naturezas Atendidas: {summary.totalConcurrentNatures}
                 </div>
               </div>
             </div>
@@ -350,39 +350,33 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             {/* Quadro Resumo Logo Abaixo do Relatório */}
             {summary.totalOccurrences > 0 && (
               <div className="mt-6 pt-4 border-t border-slate-300 space-y-4">
-                <div>
+                <div className="space-y-1.5">
                   <h5 className="text-xs font-extrabold text-slate-900 uppercase tracking-tight">
-                    Quadro Resumo — Quantitativo de Atendimentos e Naturezas
+                    Quadro Resumo — Quantitativo de Naturezas Atendidas
                   </h5>
-                  <p className="text-[10px] text-slate-600">
-                    Total de Atendimentos (Ocorrências):{' '}
-                    <strong className="font-mono text-slate-900">{summary.totalOccurrences}</strong>
-                    {' · '}
-                    Total de Naturezas Contabilizadas (incl. concorrentes):{' '}
-                    <strong className="font-mono text-slate-900">{summary.totalConcurrentNatures}</strong>
+                  <div className="bg-slate-50 border border-slate-300 rounded px-3 py-2 text-[10.5px] text-slate-800 leading-relaxed">
+                    <strong>Número de atendimentos foi {summary.totalOccurrences}</strong>, dado pelo número de{' '}
+                    <strong>RAIs</strong> registrados, enquanto houveram{' '}
+                    <strong className="text-sky-800">{summary.totalConcurrentNatures} naturezas atendidas</strong>.
                     {summary.multiNatureOccurrencesCount > 0 && (
-                      <>
-                        {' · '}
-                        Ocorrências com mais de uma natureza:{' '}
-                        <strong className="font-mono text-slate-900">{summary.multiNatureOccurrencesCount}</strong>
-                      </>
+                      <span className="text-slate-600">
+                        {' '}
+                        ({summary.multiNatureOccurrencesCount} ocorrência(s) possuíam mais de uma natureza e todas foram mencionadas e contabilizadas nas tabelas abaixo.)
+                      </span>
                     )}
-                  </p>
+                  </div>
                 </div>
 
                 {/* Tabela 1: Resumo por Grupo */}
-                <div className="max-w-xl border border-slate-300 overflow-hidden">
+                <div className="max-w-lg border border-slate-300 overflow-hidden">
                   <table className="w-full text-left border-collapse text-[10px]">
                     <thead>
                       <tr className="bg-slate-900 text-white">
                         <th className="py-1.5 px-2 font-bold border-r border-slate-700">GRUPO</th>
-                        <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-28">
-                          ATEND. (PREDOM.)
+                        <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-36">
+                          NATUREZAS ATENDIDAS
                         </th>
-                        <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-28">
-                          TOTAL NATUREZAS
-                        </th>
-                        <th className="py-1.5 px-2 font-bold text-center w-16">% NAT.</th>
+                        <th className="py-1.5 px-2 font-bold text-center w-16">%</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -395,9 +389,6 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                             {g.group}
                           </td>
                           <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-900 tabular-nums">
-                            {g.count}
-                          </td>
-                          <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-sky-800 tabular-nums">
                             {g.concurrentCount}
                           </td>
                           <td className="py-1 px-2 text-center font-mono text-slate-600 tabular-nums">
@@ -406,9 +397,8 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                         </tr>
                       ))}
                       <tr className="border-t-2 border-slate-900 bg-slate-200 font-bold text-slate-900">
-                        <td className="py-1.5 px-2 border-r border-slate-300">TOTAL GERAL POR GRUPO</td>
-                        <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono tabular-nums">
-                          {summary.totalOccurrences}
+                        <td className="py-1.5 px-2 border-r border-slate-300">
+                          TOTAL DE NATUREZAS ATENDIDAS POR GRUPO
                         </td>
                         <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono tabular-nums">
                           {summary.totalConcurrentNatures}
@@ -428,9 +418,10 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                         <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-20">CÓDIGO</th>
                         <th className="py-1.5 px-2 font-bold border-r border-slate-700">SUB-GRUPO</th>
                         <th className="py-1.5 px-2 font-bold border-r border-slate-700">NATUREZA</th>
-                        <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-20">ATEND.</th>
-                        <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-20">NATUREZAS</th>
-                        <th className="py-1.5 px-2 font-bold text-center w-14">% NAT.</th>
+                        <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-32">
+                          NATUREZAS ATENDIDAS
+                        </th>
+                        <th className="py-1.5 px-2 font-bold text-center w-14">%</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -454,9 +445,6 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                                 {n.nature}
                               </td>
                               <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-900 tabular-nums">
-                                {n.count}
-                              </td>
-                              <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-sky-800 tabular-nums">
                                 {n.concurrentCount}
                               </td>
                               <td className="py-1 px-2 text-center font-mono text-slate-600 tabular-nums">
@@ -469,9 +457,6 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                               Subtotal — {block.group} / {block.subGroup}
                             </td>
                             <td className="py-1 px-2 border-r border-slate-200 text-center font-mono tabular-nums">
-                              {block.subtotalCount}
-                            </td>
-                            <td className="py-1 px-2 border-r border-slate-200 text-center font-mono tabular-nums">
                               {block.subtotalConcurrentCount}
                             </td>
                             <td className="py-1 px-2 text-center font-mono tabular-nums">
@@ -482,10 +467,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                       ))}
                       <tr className="border-t-2 border-slate-900 bg-slate-200 font-bold text-slate-900">
                         <td colSpan={4} className="py-1.5 px-2 border-r border-slate-300">
-                          TOTAL GERAL (ATENDIMENTOS × NATUREZAS)
-                        </td>
-                        <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono tabular-nums">
-                          {summary.totalOccurrences}
+                          TOTAL GERAL DE NATUREZAS ATENDIDAS (RAIs registrados: {summary.totalOccurrences})
                         </td>
                         <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono tabular-nums">
                           {summary.totalConcurrentNatures}

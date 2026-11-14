@@ -11,6 +11,7 @@ import {
 import { OccurrenceDataset, OccurrenceRow, ReportConfig } from '../types/occurrence';
 import { isDateTimeColumn, splitDateAndTime } from '../utils/pdfGenerator';
 import { findColumnKeyByKeyword } from '../utils/natureSummary';
+import { MultiSelectFilter } from './MultiSelectFilter';
 
 interface DataTableProps {
   dataset: OccurrenceDataset;
@@ -43,6 +44,10 @@ export const DataTable: React.FC<DataTableProps> = ({
     [dataset.headers]
   );
 
+  const numberColKey = useMemo(
+    () => findColumnKeyByKeyword(dataset.headers, ['NÚMERO', 'NUMERO', 'NUM']),
+    [dataset.headers]
+  );
   const statusColKey = useMemo(
     () => findColumnKeyByKeyword(dataset.headers, ['STATUS', 'SITUACAO']),
     [dataset.headers]
@@ -55,6 +60,16 @@ export const DataTable: React.FC<DataTableProps> = ({
     () => findColumnKeyByKeyword(dataset.headers, ['NATUREZA']),
     [dataset.headers]
   );
+
+  const occurrenceOptions = useMemo(() => {
+    if (!numberColKey) return [];
+    const set = new Set<string>();
+    dataset.rows.forEach((r) => {
+      const val = r[numberColKey]?.trim();
+      if (val) set.add(val);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [dataset.rows, numberColKey]);
 
   const statusOptions = useMemo(() => {
     if (!statusColKey) return [];
@@ -82,7 +97,7 @@ export const DataTable: React.FC<DataTableProps> = ({
     dataset.rows.forEach((r) => {
       const raw = r[natureColKey]?.trim();
       if (!raw) return;
-      raw.split(/[;|\n]+/).forEach((part) => {
+      raw.split(/[;|\n+]+/).forEach((part) => {
         const clean = part.trim();
         if (clean) set.add(clean);
       });
@@ -131,10 +146,10 @@ export const DataTable: React.FC<DataTableProps> = ({
   };
 
   const hasActiveFilters = Boolean(
-    config.filterStatus !== 'all' ||
-      config.filterMunicipality !== 'all' ||
-      config.filterOccurrence.trim() ||
-      config.filterNature.trim() ||
+    config.filterStatuses.length > 0 ||
+      config.filterMunicipalities.length > 0 ||
+      config.filterOccurrences.length > 0 ||
+      config.filterNatures.length > 0 ||
       config.filterStartDateTime ||
       config.filterEndDateTime ||
       config.searchQuery.trim()
@@ -162,14 +177,14 @@ export const DataTable: React.FC<DataTableProps> = ({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-bold text-slate-900">
-              Conferência e Filtros das Ocorrências
+              Conferência e Filtros das Ocorrências (Multiseleção)
             </h2>
             <span className="text-xs font-mono tabular-nums text-slate-500">
-              {filteredRows.length} de {dataset.totalRows} registros ativos no relatório
+              {filteredRows.length} de {dataset.totalRows} RAIs ativos no relatório
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Os filtros aplicados aqui atualizam imediatamente a prévia do documento, os quadros resumo e o PDF exportado.
+            Selecione uma ou várias opções em cada filtro. O documento, os quadros resumo e o PDF são atualizados imediatamente.
           </p>
         </div>
 
@@ -207,88 +222,53 @@ export const DataTable: React.FC<DataTableProps> = ({
         </div>
       </div>
 
-      {/* Painel de Filtros Completos */}
+      {/* Painel de Filtros com Multiseleção */}
       <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Filtro por Ocorrência (Número) */}
-          <div>
-            <label htmlFor="flt-occurrence" className="text-[11px] font-bold text-slate-700 block mb-1">
-              Ocorrência (Número)
-            </label>
-            <input
-              id="flt-occurrence"
-              type="text"
-              value={config.filterOccurrence}
-              onChange={(e) => onChangeConfig({ filterOccurrence: e.target.value })}
-              placeholder="Ex: 2026-08912"
-              className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800"
-            />
-          </div>
+          <MultiSelectFilter
+            id="flt-occurrence"
+            label="Ocorrência / RAI (Multiseleção)"
+            options={occurrenceOptions}
+            selected={config.filterOccurrences}
+            onChange={(next) => onChangeConfig({ filterOccurrences: next })}
+            allLabel="Todas as Ocorrências"
+            searchPlaceholder="Buscar número/RAI..."
+            monoOptions
+          />
 
-          {/* Filtro por Natureza */}
-          <div>
-            <label htmlFor="flt-nature" className="text-[11px] font-bold text-slate-700 block mb-1">
-              Natureza (Código ou Texto)
-            </label>
-            <input
-              id="flt-nature"
-              type="text"
-              list="datatable-nature-options"
-              value={config.filterNature}
-              onChange={(e) => onChangeConfig({ filterNature: e.target.value })}
-              placeholder="Digite ou escolha uma natureza..."
-              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800"
-            />
-            <datalist id="datatable-nature-options">
-              {natureOptions.map((nat) => (
-                <option key={nat} value={nat} />
-              ))}
-            </datalist>
-          </div>
+          <MultiSelectFilter
+            id="flt-nature"
+            label="Natureza (Multiseleção)"
+            options={natureOptions}
+            selected={config.filterNatures}
+            onChange={(next) => onChangeConfig({ filterNatures: next })}
+            allLabel="Todas as Naturezas"
+            searchPlaceholder="Buscar código ou descrição..."
+          />
 
-          {/* Filtro por Município */}
-          <div>
-            <label htmlFor="flt-municipality" className="text-[11px] font-bold text-slate-700 block mb-1">
-              Município
-            </label>
-            <select
-              id="flt-municipality"
-              value={config.filterMunicipality}
-              onChange={(e) => onChangeConfig({ filterMunicipality: e.target.value })}
-              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800 cursor-pointer"
-            >
-              <option value="all">Todos os Municípios ({municipalityOptions.length})</option>
-              {municipalityOptions.map((mun) => (
-                <option key={mun} value={mun}>
-                  {mun}
-                </option>
-              ))}
-            </select>
-          </div>
+          <MultiSelectFilter
+            id="flt-municipality"
+            label="Município (Multiseleção)"
+            options={municipalityOptions}
+            selected={config.filterMunicipalities}
+            onChange={(next) => onChangeConfig({ filterMunicipalities: next })}
+            allLabel="Todos os Municípios"
+            searchPlaceholder="Buscar município..."
+          />
 
-          {/* Filtro por Status */}
-          <div>
-            <label htmlFor="flt-status" className="text-[11px] font-bold text-slate-700 block mb-1">
-              Status
-            </label>
-            <select
-              id="flt-status"
-              value={config.filterStatus}
-              onChange={(e) => onChangeConfig({ filterStatus: e.target.value })}
-              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-800 cursor-pointer"
-            >
-              <option value="all">Todos os Status ({statusOptions.length})</option>
-              {statusOptions.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
-          </div>
+          <MultiSelectFilter
+            id="flt-status"
+            label="Status (Multiseleção)"
+            options={statusOptions}
+            selected={config.filterStatuses}
+            onChange={(next) => onChangeConfig({ filterStatuses: next })}
+            allLabel="Todos os Status"
+            searchPlaceholder="Buscar status..."
+          />
         </div>
 
         {/* Linha 2: Intervalo de Datas/Horários + Busca Livre */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 border-t border-slate-200/80">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-200/80">
           <div>
             <label htmlFor="flt-date-field" className="text-[11px] font-bold text-slate-700 block mb-1">
               Campo de Data/Hora

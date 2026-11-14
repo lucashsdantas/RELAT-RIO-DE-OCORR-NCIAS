@@ -3293,9 +3293,9 @@ export function detectNatureCandidates(rawText: string): NatureCatalogEntry[] {
     matches.forEach(addEntry);
   }
 
-  // 2. Procura códigos numéricos de 5 dígitos (ex: 30113, 61201)
+  // 2. Procura códigos numéricos de 5 ou 6 dígitos (ex: 30113, 61201, 100101)
   const normRaw = normalizeNatureText(text);
-  const fiveDigitMatches = text.match(/\b\d{5}\b/g) || [];
+  const fiveDigitMatches = text.match(/\b\d{5,6}\b/g) || [];
   for (const code of fiveDigitMatches) {
     const matches = NATURE_CATALOG.filter((e) => e.code === code);
     if (matches.length === 1) {

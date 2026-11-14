@@ -158,11 +158,11 @@ export function exportStandaloneSingleFileHtml(): void {
       </div>
     </section>
 
-    <!-- 3. Classificação e Natureza Predominante -->
+    <!-- 3. Classificação e Natureza -->
     <section id="classificationSection" class="hidden bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
         <div>
-          <h3 class="text-sm font-bold text-slate-900">3. Definição da Natureza Predominante, Concorrência &amp; Produtividade</h3>
+          <h3 class="text-sm font-bold text-slate-900">3. Conferência das Naturezas Detectadas &amp; Produtividade</h3>
           <p id="classificationHint" class="text-xs text-slate-600"></p>
         </div>
         <button id="btnToggleAllClass" type="button" class="px-3 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer">
@@ -172,14 +172,14 @@ export function exportStandaloneSingleFileHtml(): void {
       <div id="classificationList" class="divide-y divide-slate-200 border border-slate-200 rounded-lg"></div>
     </section>
 
-    <!-- 4. Filtros Completos + Pré-visualização Paginada -->
+    <!-- 4. Filtros Multiseleção + Pré-visualização Paginada -->
     <section id="previewSection" class="hidden bg-slate-200/70 border border-slate-300 rounded-xl p-5 space-y-4">
       <!-- Painel de Filtros -->
       <div class="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
           <div>
-            <h3 class="text-sm font-bold text-slate-900">4. Filtros e Pré-visualização do Documento</h3>
-            <p class="text-[11px] text-slate-500">Filtre por ocorrência, natureza, município, status ou intervalo de datas/horários.</p>
+            <h3 class="text-sm font-bold text-slate-900">4. Filtros (Multiseleção) e Pré-visualização do Documento</h3>
+            <p class="text-[11px] text-slate-500">Selecione uma ou várias opções em ocorrência, natureza, município, status ou intervalo de datas/horários.</p>
           </div>
           <div class="flex items-center gap-2">
             <span id="rowCountLabel" class="text-xs font-mono text-slate-600"></span>
@@ -188,27 +188,10 @@ export function exportStandaloneSingleFileHtml(): void {
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          <div>
-            <label class="text-[11px] font-bold text-slate-700 block mb-1">Ocorrência (Número)</label>
-            <input type="text" id="fltOcc" placeholder="Ex: 2026-08912" class="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg">
-          </div>
-          <div>
-            <label class="text-[11px] font-bold text-slate-700 block mb-1">Natureza</label>
-            <input type="text" id="fltNat" list="fltNatList" placeholder="Código ou descrição..." class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg">
-            <datalist id="fltNatList"></datalist>
-          </div>
-          <div>
-            <label class="text-[11px] font-bold text-slate-700 block mb-1">Município</label>
-            <select id="fltMun" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg">
-              <option value="all">Todos os Municípios</option>
-            </select>
-          </div>
-          <div>
-            <label class="text-[11px] font-bold text-slate-700 block mb-1">Status</label>
-            <select id="fltStatus" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg">
-              <option value="all">Todos os Status</option>
-            </select>
-          </div>
+          <div id="msOccWrap" class="relative"></div>
+          <div id="msNatWrap" class="relative"></div>
+          <div id="msMunWrap" class="relative"></div>
+          <div id="msStatusWrap" class="relative"></div>
           <div>
             <label class="text-[11px] font-bold text-slate-700 block mb-1">Campo de Data/Hora</label>
             <select id="fltDateField" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg">
@@ -713,6 +696,137 @@ export function exportStandaloneSingleFileHtml(): void {
       return f ? f.key : null;
     }
 
+    const multiFilterState = { occ: [], nat: [], mun: [], status: [] };
+
+    function renderMultiSelectWidget(containerId, stateKey, label, allLabel, options, mono) {
+      const wrap = document.getElementById(containerId);
+      wrap.innerHTML = '';
+
+      const lbl = document.createElement('label');
+      lbl.className = 'text-[11px] font-bold text-slate-700 block mb-1';
+      lbl.textContent = label;
+      wrap.appendChild(lbl);
+
+      const selArr = multiFilterState[stateKey];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs rounded-lg border text-left cursor-pointer ' + (selArr.length > 0 ? 'bg-slate-900 text-white border-slate-900 font-semibold' : 'bg-slate-50 text-slate-800 border-slate-300');
+      const txt = selArr.length === 0 ? (allLabel + ' (' + options.length + ')') : (selArr.length === 1 ? selArr[0] : (selArr.length + ' selecionados'));
+      btn.innerHTML = '<span class="truncate ' + (mono ? 'font-mono' : '') + '">' + txt + '</span><span class="text-[10px]">▼</span>';
+
+      const panel = document.createElement('div');
+      panel.className = 'hidden absolute left-0 right-0 mt-1 bg-white border border-slate-300 rounded-xl shadow-lg z-30 overflow-hidden';
+
+      const topBar = document.createElement('div');
+      topBar.className = 'p-2 border-b border-slate-100 bg-slate-50 space-y-1.5';
+      const searchInp = document.createElement('input');
+      searchInp.type = 'text';
+      searchInp.placeholder = 'Buscar opção...';
+      searchInp.className = 'w-full px-2 py-1 text-xs bg-white border border-slate-300 rounded';
+      topBar.appendChild(searchInp);
+
+      const actRow = document.createElement('div');
+      actRow.className = 'flex items-center justify-between text-[11px]';
+      const btnAll = document.createElement('button');
+      btnAll.type = 'button';
+      btnAll.className = 'font-semibold text-sky-700 cursor-pointer';
+      btnAll.textContent = 'Marcar visíveis';
+      const btnClr = document.createElement('button');
+      btnClr.type = 'button';
+      btnClr.className = 'font-medium text-rose-700 cursor-pointer';
+      btnClr.textContent = 'Limpar';
+      actRow.appendChild(btnAll);
+      actRow.appendChild(btnClr);
+      topBar.appendChild(actRow);
+      panel.appendChild(topBar);
+
+      const listDiv = document.createElement('div');
+      listDiv.className = 'max-h-48 overflow-y-auto divide-y divide-slate-100';
+      panel.appendChild(listDiv);
+
+      const drawOpts = () => {
+        const q = searchInp.value.trim().toLowerCase();
+        const vis = q ? options.filter(o => o.toLowerCase().includes(q)) : options;
+        listDiv.innerHTML = '';
+        if (!vis.length) {
+          listDiv.innerHTML = '<div class="p-2.5 text-center text-xs text-slate-500">Nenhuma opção encontrada.</div>';
+          return;
+        }
+        vis.forEach(opt => {
+          const chk = multiFilterState[stateKey].includes(opt);
+          const rowBtn = document.createElement('button');
+          rowBtn.type = 'button';
+          rowBtn.className = 'w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-left cursor-pointer ' + (chk ? 'bg-sky-50 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50');
+          rowBtn.innerHTML = '<span class="w-4 h-4 rounded border flex items-center justify-center shrink-0 ' + (chk ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-300') + '">' + (chk ? '✓' : '') + '</span><span class="truncate ' + (mono ? 'font-mono' : '') + '">' + opt + '</span>';
+          rowBtn.onclick = (e) => {
+            e.stopPropagation();
+            const cur = multiFilterState[stateKey];
+            multiFilterState[stateKey] = cur.includes(opt) ? cur.filter(x => x !== opt) : [...cur, opt];
+            currentPage = 1;
+            drawOpts();
+            updateBtnText();
+            if (currentData) renderAll();
+          };
+          listDiv.appendChild(rowBtn);
+        });
+      };
+
+      const updateBtnText = () => {
+        const s = multiFilterState[stateKey];
+        btn.className = 'w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs rounded-lg border text-left cursor-pointer ' + (s.length > 0 ? 'bg-slate-900 text-white border-slate-900 font-semibold' : 'bg-slate-50 text-slate-800 border-slate-300');
+        const t = s.length === 0 ? (allLabel + ' (' + options.length + ')') : (s.length === 1 ? s[0] : (s.length + ' selecionados'));
+        btn.innerHTML = '<span class="truncate ' + (mono ? 'font-mono' : '') + '">' + t + '</span><span class="text-[10px]">▼</span>';
+      };
+
+      btnAll.onclick = (e) => {
+        e.stopPropagation();
+        const q = searchInp.value.trim().toLowerCase();
+        const vis = q ? options.filter(o => o.toLowerCase().includes(q)) : options;
+        multiFilterState[stateKey] = Array.from(new Set([...multiFilterState[stateKey], ...vis]));
+        currentPage = 1;
+        drawOpts();
+        updateBtnText();
+        if (currentData) renderAll();
+      };
+
+      btnClr.onclick = (e) => {
+        e.stopPropagation();
+        multiFilterState[stateKey] = [];
+        currentPage = 1;
+        drawOpts();
+        updateBtnText();
+        if (currentData) renderAll();
+      };
+
+      searchInp.addEventListener('input', drawOpts);
+      searchInp.addEventListener('click', e => e.stopPropagation());
+
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const wasHidden = panel.classList.contains('hidden');
+        document.querySelectorAll('.ms-open-panel').forEach(el => {
+          el.classList.add('hidden');
+          el.classList.remove('ms-open-panel');
+        });
+        if (wasHidden) {
+          drawOpts();
+          panel.classList.remove('hidden');
+          panel.classList.add('ms-open-panel');
+          searchInp.focus();
+        }
+      };
+
+      wrap.appendChild(btn);
+      wrap.appendChild(panel);
+    }
+
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.ms-open-panel').forEach(el => {
+        el.classList.add('hidden');
+        el.classList.remove('ms-open-panel');
+      });
+    });
+
     function getFilteredRows() {
       if (!currentData) return [];
       const h = currentData.headers;
@@ -723,10 +837,10 @@ export function exportStandaloneSingleFileHtml(): void {
       const factK = findCol(h, ['DATA FATO', 'FATO']);
       const regK = findCol(h, ['DATA REGISTRO', 'REGISTRO']);
 
-      const fOcc = document.getElementById('fltOcc').value.trim().toLowerCase();
-      const fNat = document.getElementById('fltNat').value.trim().toLowerCase();
-      const fMun = document.getElementById('fltMun').value;
-      const fSt = document.getElementById('fltStatus').value;
+      const sOcc = new Set(multiFilterState.occ);
+      const sNat = new Set(multiFilterState.nat);
+      const sMun = new Set(multiFilterState.mun);
+      const sSt = new Set(multiFilterState.status);
       const fDateField = document.getElementById('fltDateField').value;
       const fStartMs = parseDateMs(document.getElementById('fltStartDt').value);
       const fEndMs = parseDateMs(document.getElementById('fltEndDt').value);
@@ -734,15 +848,13 @@ export function exportStandaloneSingleFileHtml(): void {
       const hasDt = fStartMs !== null || fEndMs !== null;
 
       return currentData.rows.filter(r => {
-        if (fSt !== 'all' && stK && (r[stK] || '').trim() !== fSt) return false;
-        if (fMun !== 'all' && munK && (r[munK] || '').trim() !== fMun) return false;
-        if (fOcc) {
-          const v = (numK ? (r[numK] || '') : Object.values(r).join(' ')).toLowerCase();
-          if (!v.includes(fOcc)) return false;
-        }
-        if (fNat) {
-          const v = (natK ? (r[natK] || '') : Object.values(r).join(' ')).toLowerCase();
-          if (!v.includes(fNat)) return false;
+        if (sSt.size > 0 && stK && !sSt.has((r[stK] || '').trim())) return false;
+        if (sMun.size > 0 && munK && !sMun.has((r[munK] || '').trim())) return false;
+        if (sOcc.size > 0 && numK && !sOcc.has((r[numK] || '').trim())) return false;
+        if (sNat.size > 0 && natK) {
+          const raw = (r[natK] || '').trim();
+          const parts = raw.split(/[;|\\n+]+/).map(p => p.trim()).filter(Boolean);
+          if (!sNat.has(raw) && !parts.some(p => sNat.has(p))) return false;
         }
         if (hasDt) {
           const cols = [];
@@ -763,39 +875,24 @@ export function exportStandaloneSingleFileHtml(): void {
     function populateFilterOptions() {
       if (!currentData) return;
       const h = currentData.headers;
+      const numK = findCol(h, ['NÚMERO', 'NUMERO', 'NUM']);
       const stK = findCol(h, ['STATUS', 'SITUACAO']);
       const munK = findCol(h, ['MUNICÍPIO', 'MUNICIPIO', 'CIDADE']);
       const natK = findCol(h, ['NATUREZA']);
 
-      const stSel = document.getElementById('fltStatus');
-      const prevSt = stSel.value;
-      stSel.innerHTML = '<option value="all">Todos os Status</option>';
-      if (stK) {
-        Array.from(new Set(currentData.rows.map(r => (r[stK] || '').trim()).filter(Boolean))).sort().forEach(v => {
-          const o = document.createElement('option'); o.value = v; o.textContent = v; stSel.appendChild(o);
-        });
-      }
-      stSel.value = prevSt || 'all';
-
-      const munSel = document.getElementById('fltMun');
-      const prevMun = munSel.value;
-      munSel.innerHTML = '<option value="all">Todos os Municípios</option>';
-      if (munK) {
-        Array.from(new Set(currentData.rows.map(r => (r[munK] || '').trim()).filter(Boolean))).sort().forEach(v => {
-          const o = document.createElement('option'); o.value = v; o.textContent = v; munSel.appendChild(o);
-        });
-      }
-      munSel.value = prevMun || 'all';
-
-      const natDl = document.getElementById('fltNatList');
-      natDl.innerHTML = '';
+      const occOpts = numK ? Array.from(new Set(currentData.rows.map(r => (r[numK] || '').trim()).filter(Boolean))).sort() : [];
+      const stOpts = stK ? Array.from(new Set(currentData.rows.map(r => (r[stK] || '').trim()).filter(Boolean))).sort() : [];
+      const munOpts = munK ? Array.from(new Set(currentData.rows.map(r => (r[munK] || '').trim()).filter(Boolean))).sort() : [];
+      const natSet = new Set();
       if (natK) {
-        const s = new Set();
-        currentData.rows.forEach(r => (r[natK] || '').split(/[;|\\n]+/).forEach(p => { if (p.trim()) s.add(p.trim()); }));
-        Array.from(s).sort().forEach(v => {
-          const o = document.createElement('option'); o.value = v; natDl.appendChild(o);
-        });
+        currentData.rows.forEach(r => (r[natK] || '').split(/[;|\\n+]+/).forEach(p => { if (p.trim()) natSet.add(p.trim()); }));
       }
+      const natOpts = Array.from(natSet).sort();
+
+      renderMultiSelectWidget('msOccWrap', 'occ', 'Ocorrência / RAI (Multiseleção)', 'Todas as Ocorrências', occOpts, true);
+      renderMultiSelectWidget('msNatWrap', 'nat', 'Natureza (Multiseleção)', 'Todas as Naturezas', natOpts, false);
+      renderMultiSelectWidget('msMunWrap', 'mun', 'Município (Multiseleção)', 'Todos os Municípios', munOpts, false);
+      renderMultiSelectWidget('msStatusWrap', 'status', 'Status (Multiseleção)', 'Todos os Status', stOpts, false);
     }
 
     function computeClassificationAndSummary(rowsToProcess) {
@@ -826,7 +923,7 @@ export function exportStandaloneSingleFileHtml(): void {
       const grpMap = new Map();
       const natMap = new Map();
       const prodMap = new Map();
-      let multiPending = 0, unclass = 0, totalConcurrent = 0;
+      let multiPending = 0, unclass = 0, totalConcurrent = 0, multiNatureOccs = 0;
       let prodTotal = 0, prodExcl = 0, prodMixed = 0;
 
       const ensureGrp = g => { if (!grpMap.has(g)) grpMap.set(g, { count: 0, concurrentCount: 0 }); return grpMap.get(g); };
@@ -865,8 +962,11 @@ export function exportStandaloneSingleFileHtml(): void {
           ensureNat({ id: 'UNCLASS__' + normText(it.raw), code: '—', group: g, subGroup: 'A DEFINIR', nature: it.raw || 'Sem natureza' }).count++;
         }
 
-        // Concorrentes
-        const concList = it.operational.length ? it.operational : (it.prodList.length ? it.prodList : (it.selected ? [it.selected] : []));
+        // Todas as Naturezas Atendidas (múltiplas naturezas somam todas na tabela)
+        const concList = (it.isManual && it.selected && it.operational.length <= 1)
+          ? [it.selected]
+          : (it.operational.length ? it.operational : (it.prodList.length ? it.prodList : (it.selected ? [it.selected] : [])));
+        if (concList.length > 1) multiNatureOccs++;
         if (concList.length) {
           concList.forEach(ce => {
             totalConcurrent++;
@@ -887,13 +987,13 @@ export function exportStandaloneSingleFileHtml(): void {
         count: c.count,
         concurrentCount: c.concurrentCount,
         pct: totalConcurrent ? (c.concurrentCount / totalConcurrent * 100) : 0
-      })).sort((a, b) => b.count - a.count || b.concurrentCount - a.concurrentCount || a.group.localeCompare(b.group, 'pt-BR'));
+      })).sort((a, b) => b.concurrentCount - a.concurrentCount || b.count - a.count || a.group.localeCompare(b.group, 'pt-BR'));
 
       const grpOrd = new Map(byGroup.map((g, i) => [g.group, i]));
-      const byNature = Array.from(natMap.values()).map(n => ({
+      const byNature = Array.from(natMap.values()).filter(n => n.concurrentCount > 0).map(n => ({
         ...n,
         pct: totalConcurrent ? (n.concurrentCount / totalConcurrent * 100) : 0
-      })).sort((a, b) => (grpOrd.get(a.group) - grpOrd.get(b.group)) || (b.count - a.count) || (b.concurrentCount - a.concurrentCount) || a.code.localeCompare(b.code));
+      })).sort((a, b) => (grpOrd.get(a.group) - grpOrd.get(b.group)) || (b.concurrentCount - a.concurrentCount) || (b.count - a.count) || a.code.localeCompare(b.code));
 
       const subMap = new Map();
       byNature.forEach(entry => {
@@ -915,7 +1015,7 @@ export function exportStandaloneSingleFileHtml(): void {
         const ga = grpOrd.get(a.group) ?? 999;
         const gb = grpOrd.get(b.group) ?? 999;
         if (ga !== gb) return ga - gb;
-        if (b.subtotalCount !== a.subtotalCount) return b.subtotalCount - a.subtotalCount;
+        if (b.subtotalConc !== a.subtotalConc) return b.subtotalConc - a.subtotalConc;
         return a.subGroup.localeCompare(b.subGroup, 'pt-BR');
       });
 
@@ -924,7 +1024,7 @@ export function exportStandaloneSingleFileHtml(): void {
         pct: prodTotal ? (p.totalCount / prodTotal * 100) : 0
       })).sort((a, b) => b.totalCount - a.totalCount || a.code.localeCompare(b.code));
 
-      return { items, summary: { total, totalConcurrent, byGroup, byNature, bySubGroup, byProd, prodTotal, prodExcl, prodMixed, multiPending, unclass } };
+      return { items, summary: { total, totalConcurrent, multiNatureOccs, byGroup, byNature, bySubGroup, byProd, prodTotal, prodExcl, prodMixed, multiPending, unclass } };
     }
 
     function fmtBrDate(iso) {
@@ -1070,9 +1170,9 @@ export function exportStandaloneSingleFileHtml(): void {
 
       const attention = items.filter(it => it.hasMultiple || it.isUnclassified || it.isManual);
       const listItems = showAllClassifications ? items : attention;
-      document.getElementById('classificationHint').textContent = (summary.multiPending + summary.unclass > 0)
-        ? (summary.multiPending + summary.unclass) + ' ocorrência(s) precisam de confirmação da natureza predominante. (' + summary.total + ' atendimentos · ' + summary.totalConcurrent + ' naturezas · ' + summary.prodTotal + ' produtividade)'
-        : summary.total + ' atendimentos · ' + summary.totalConcurrent + ' naturezas · ' + summary.prodTotal + ' registros de Produtividade.';
+      document.getElementById('classificationHint').textContent = summary.unclass > 0
+        ? summary.unclass + ' ocorrência(s) sem classificação automática. Selecione no catálogo abaixo. (' + summary.total + ' RAIs · ' + summary.totalConcurrent + ' naturezas atendidas)'
+        : 'Número de atendimentos foi ' + summary.total + ' (RAIs registrados), enquanto houveram ' + summary.totalConcurrent + ' naturezas atendidas.';
 
       const classListDiv = document.getElementById('classificationList');
       classListDiv.innerHTML = '';
@@ -1081,8 +1181,8 @@ export function exportStandaloneSingleFileHtml(): void {
       } else {
         listItems.forEach(it => {
           const wrap = document.createElement('div');
-          wrap.className = 'p-3 space-y-2 ' + (it.isUnclassified ? 'bg-rose-50/40' : (it.hasMultiple && !it.isManual ? 'bg-amber-50/40' : 'bg-white'));
-          wrap.innerHTML = '<div class="text-xs"><strong class="font-mono">' + it.occNum + '</strong> — <span class="font-mono text-slate-600">' + it.raw + '</span>' + (it.prodList.length ? ' <span class="text-sky-700 font-semibold">[Produtividade' + (it.isExclusiveProd ? ' exclusiva' : ' + operacional') + ']</span>' : '') + '</div>';
+          wrap.className = 'p-3 space-y-2 ' + (it.isUnclassified ? 'bg-rose-50/40' : (it.hasMultiple ? 'bg-sky-50/40' : 'bg-white'));
+          wrap.innerHTML = '<div class="text-xs"><strong class="font-mono">RAI ' + it.occNum + '</strong> — <span class="font-mono text-slate-600">' + it.raw + '</span>' + (it.hasMultiple ? ' <span class="text-sky-800 font-semibold">[Multi-natureza: todas somadas na tabela]</span>' : '') + (it.prodList.length ? ' <span class="text-sky-700 font-semibold">[Produtividade' + (it.isExclusiveProd ? ' exclusiva' : ' + operacional') + ']</span>' : '') + '</div>';
 
           if (it.candidates.length > 0) {
             const cRow = document.createElement('div');
@@ -1137,7 +1237,7 @@ export function exportStandaloneSingleFileHtml(): void {
         '<div class="text-right text-[11px]">' +
           '<div class="font-bold text-slate-900">ALA ' + wing + '</div>' +
           '<div class="text-slate-500">Gerado em: ' + new Date().toLocaleString('pt-BR') + '</div>' +
-          '<div class="font-bold text-sky-700">Total: ' + summary.total + ' atendimentos · ' + summary.totalConcurrent + ' naturezas</div>' +
+          '<div class="font-bold text-sky-700">Atendimentos (RAIs): ' + summary.total + ' · Naturezas Atendidas: ' + summary.totalConcurrent + '</div>' +
         '</div>';
 
       const active = currentData.headers.filter(h => visibleColumnsMap[h.key]);
@@ -1177,21 +1277,25 @@ export function exportStandaloneSingleFileHtml(): void {
       document.getElementById('previewTable').innerHTML = html;
 
       const pctStr = v => v.toFixed(1).replace('.', ',') + '%';
-      let sumHtml = '<div><h5 class="text-xs font-extrabold text-slate-900 uppercase">Quadro Resumo — Quantitativo de Atendimentos e Naturezas</h5><p class="text-[10px] text-slate-600">Atendimentos (Ocorrências): ' + summary.total + ' | Total de Naturezas (incl. concorrentes): ' + summary.totalConcurrent + '</p></div>';
-      sumHtml += '<table class="max-w-xl w-full text-left text-[10px] border-collapse border border-slate-300"><thead class="bg-slate-900 text-white"><tr><th class="p-1.5 border border-slate-700">GRUPO</th><th class="p-1.5 border border-slate-700 text-center">ATEND. (PREDOM.)</th><th class="p-1.5 border border-slate-700 text-center">TOTAL NATUREZAS</th><th class="p-1.5 border border-slate-700 text-center">% NAT.</th></tr></thead><tbody>';
-      summary.byGroup.forEach((g, i) => {
-        sumHtml += '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + '"><td class="p-1 border border-slate-200 font-semibold">' + g.group + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + g.count + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold text-sky-700">' + g.concurrentCount + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + pctStr(g.pct) + '</td></tr>';
-      });
-      sumHtml += '<tr class="bg-slate-200 font-bold"><td class="p-1.5 border border-slate-300">TOTAL GERAL POR GRUPO</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.total + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.totalConcurrent + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + (summary.totalConcurrent ? '100,0%' : '0,0%') + '</td></tr></tbody></table>';
+      let sumHtml = '<div class="space-y-1.5"><h5 class="text-xs font-extrabold text-slate-900 uppercase">Quadro Resumo — Quantitativo de Naturezas Atendidas</h5>' +
+        '<div class="bg-slate-50 border border-slate-300 rounded px-3 py-2 text-[10.5px] text-slate-800"><strong>Número de atendimentos foi ' + summary.total + '</strong>, dado pelo número de <strong>RAIs</strong> registrados, enquanto houveram <strong class="text-sky-800">' + summary.totalConcurrent + ' naturezas atendidas</strong>.' +
+        (summary.multiNatureOccs > 0 ? ' (' + summary.multiNatureOccs + ' ocorrência(s) possuíam mais de uma natureza e todas foram mencionadas e contabilizadas abaixo.)' : '') +
+        '</div></div>';
 
-      sumHtml += '<table class="w-full text-left text-[10px] border-collapse border border-slate-300"><thead class="bg-slate-900 text-white"><tr><th class="p-1.5 border border-slate-700">GRUPO</th><th class="p-1.5 border border-slate-700 text-center">CÓDIGO</th><th class="p-1.5 border border-slate-700">SUB-GRUPO</th><th class="p-1.5 border border-slate-700">NATUREZA</th><th class="p-1.5 border border-slate-700 text-center">ATEND.</th><th class="p-1.5 border border-slate-700 text-center">NATUREZAS</th><th class="p-1.5 border border-slate-700 text-center">% NAT.</th></tr></thead><tbody>';
+      sumHtml += '<table class="max-w-lg w-full text-left text-[10px] border-collapse border border-slate-300"><thead class="bg-slate-900 text-white"><tr><th class="p-1.5 border border-slate-700">GRUPO</th><th class="p-1.5 border border-slate-700 text-center">NATUREZAS ATENDIDAS</th><th class="p-1.5 border border-slate-700 text-center">%</th></tr></thead><tbody>';
+      summary.byGroup.forEach((g, i) => {
+        sumHtml += '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + '"><td class="p-1 border border-slate-200 font-semibold">' + g.group + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + g.concurrentCount + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + pctStr(g.pct) + '</td></tr>';
+      });
+      sumHtml += '<tr class="bg-slate-200 font-bold"><td class="p-1.5 border border-slate-300">TOTAL DE NATUREZAS ATENDIDAS POR GRUPO</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.totalConcurrent + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + (summary.totalConcurrent ? '100,0%' : '0,0%') + '</td></tr></tbody></table>';
+
+      sumHtml += '<table class="w-full text-left text-[10px] border-collapse border border-slate-300"><thead class="bg-slate-900 text-white"><tr><th class="p-1.5 border border-slate-700">GRUPO</th><th class="p-1.5 border border-slate-700 text-center">CÓDIGO</th><th class="p-1.5 border border-slate-700">SUB-GRUPO</th><th class="p-1.5 border border-slate-700">NATUREZA</th><th class="p-1.5 border border-slate-700 text-center">NATUREZAS ATENDIDAS</th><th class="p-1.5 border border-slate-700 text-center">%</th></tr></thead><tbody>';
       summary.bySubGroup.forEach(blk => {
         blk.entries.forEach((n, i) => {
-          sumHtml += '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + '"><td class="p-1 border border-slate-200 font-semibold">' + n.group + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + n.code + '</td><td class="p-1 border border-slate-200">' + n.subGroup + '</td><td class="p-1 border border-slate-200">' + n.nature + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + n.count + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold text-sky-700">' + n.concurrentCount + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + pctStr(n.pct) + '</td></tr>';
+          sumHtml += '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + '"><td class="p-1 border border-slate-200 font-semibold">' + n.group + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + n.code + '</td><td class="p-1 border border-slate-200">' + n.subGroup + '</td><td class="p-1 border border-slate-200">' + n.nature + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + n.concurrentCount + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + pctStr(n.pct) + '</td></tr>';
         });
-        sumHtml += '<tr class="bg-slate-100 font-bold text-slate-900"><td colspan="4" class="p-1 border border-slate-300 text-right">Subtotal — ' + blk.group + ' / ' + blk.subGroup + '</td><td class="p-1 border border-slate-300 text-center font-mono">' + blk.subtotalCount + '</td><td class="p-1 border border-slate-300 text-center font-mono">' + blk.subtotalConc + '</td><td class="p-1 border border-slate-300 text-center font-mono">' + pctStr(blk.subtotalPct) + '</td></tr>';
+        sumHtml += '<tr class="bg-slate-100 font-bold text-slate-900"><td colspan="4" class="p-1 border border-slate-300 text-right">Subtotal — ' + blk.group + ' / ' + blk.subGroup + '</td><td class="p-1 border border-slate-300 text-center font-mono">' + blk.subtotalConc + '</td><td class="p-1 border border-slate-300 text-center font-mono">' + pctStr(blk.subtotalPct) + '</td></tr>';
       });
-      sumHtml += '<tr class="bg-slate-200 font-bold"><td colspan="4" class="p-1.5 border border-slate-300">TOTAL GERAL (ATENDIMENTOS × NATUREZAS)</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.total + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.totalConcurrent + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + (summary.totalConcurrent ? '100,0%' : '0,0%') + '</td></tr></tbody></table>';
+      sumHtml += '<tr class="bg-slate-200 font-bold"><td colspan="4" class="p-1.5 border border-slate-300">TOTAL GERAL DE NATUREZAS ATENDIDAS (RAIs registrados: ' + summary.total + ')</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.totalConcurrent + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + (summary.totalConcurrent ? '100,0%' : '0,0%') + '</td></tr></tbody></table>';
 
       if (summary.prodTotal > 0) {
         sumHtml += '<div class="pt-3 border-t border-slate-300 space-y-2"><div><h5 class="text-xs font-extrabold text-slate-900 uppercase">Quadro à Parte — Atendimentos com Natureza de Produtividade</h5><p class="text-[10px] text-slate-600">Total de Produtividade: ' + summary.prodTotal + ' | Exclusivas: ' + summary.prodExcl + ' | Mistas (com outra natureza): ' + summary.prodMixed + '</p></div>';
@@ -1204,7 +1308,7 @@ export function exportStandaloneSingleFileHtml(): void {
 
       document.getElementById('summaryPreview').innerHTML = sumHtml;
       document.getElementById('docFooterPreview').innerHTML = '<span>DOCUMENTO DE USO CORPORATIVO / RESERVADO</span><span>Página ' + currentPage + ' de ' + totalPages + '</span>';
-      document.getElementById('rowCountLabel').textContent = filtered.length + ' de ' + currentData.rows.length + ' atendimento(s) · ' + summary.totalConcurrent + ' natureza(s)';
+      document.getElementById('rowCountLabel').textContent = filtered.length + ' de ' + currentData.rows.length + ' RAIs · ' + summary.totalConcurrent + ' naturezas atendidas';
     }
 
     function createPdfDoc() {
@@ -1271,22 +1375,19 @@ export function exportStandaloneSingleFileHtml(): void {
 
       const groupBody = [[
         { text: 'GRUPO', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7 },
-        { text: 'ATEND. (PREDOM.)', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
-        { text: 'TOTAL NATUREZAS', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
-        { text: '% NAT.', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' }
+        { text: 'NATUREZAS ATENDIDAS', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
+        { text: '%', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' }
       ]];
       summary.byGroup.forEach((g, i) => {
         const f = i % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
         groupBody.push([
           { text: g.group, fillColor: f, bold: true, fontSize: 7 },
-          { text: String(g.count), fillColor: f, bold: true, alignment: 'center', fontSize: 7 },
-          { text: String(g.concurrentCount), fillColor: f, bold: true, alignment: 'center', fontSize: 7, color: '#0369A1' },
+          { text: String(g.concurrentCount), fillColor: f, bold: true, alignment: 'center', fontSize: 7 },
           { text: pctStr(g.pct), fillColor: f, alignment: 'center', fontSize: 7 }
         ]);
       });
       groupBody.push([
-        { text: 'TOTAL GERAL POR GRUPO', fillColor: '#E2E8F0', bold: true, fontSize: 7 },
-        { text: String(summary.total), fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 },
+        { text: 'TOTAL DE NATUREZAS ATENDIDAS POR GRUPO', fillColor: '#E2E8F0', bold: true, fontSize: 7 },
         { text: String(summary.totalConcurrent), fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 },
         { text: summary.totalConcurrent ? '100,0%' : '0,0%', fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 }
       ]);
@@ -1296,9 +1397,8 @@ export function exportStandaloneSingleFileHtml(): void {
         { text: 'CÓDIGO', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
         { text: 'SUB-GRUPO', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7 },
         { text: 'NATUREZA', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7 },
-        { text: 'ATEND.', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
-        { text: 'NATUREZAS', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
-        { text: '% NAT.', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' }
+        { text: 'NATUREZAS ATENDIDAS', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
+        { text: '%', fillColor: '#0F172A', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' }
       ]];
       summary.bySubGroup.forEach(blk => {
         blk.entries.forEach((n, i) => {
@@ -1308,33 +1408,32 @@ export function exportStandaloneSingleFileHtml(): void {
             { text: n.code, fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
             { text: n.subGroup, fillColor: f, fontSize: 6.5 },
             { text: n.nature, fillColor: f, fontSize: 6.5 },
-            { text: String(n.count), fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
-            { text: String(n.concurrentCount), fillColor: f, bold: true, alignment: 'center', fontSize: 6.5, color: '#0369A1' },
+            { text: String(n.concurrentCount), fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
             { text: pctStr(n.pct), fillColor: f, alignment: 'center', fontSize: 6.5 }
           ]);
         });
         natureBody.push([
           { text: 'Subtotal — ' + blk.group + ' / ' + blk.subGroup, colSpan: 4, fillColor: '#F1F5F9', bold: true, alignment: 'right', fontSize: 6.5, color: '#0F172A' },
           {}, {}, {},
-          { text: String(blk.subtotalCount), fillColor: '#F1F5F9', bold: true, alignment: 'center', fontSize: 6.5, color: '#0F172A' },
           { text: String(blk.subtotalConc), fillColor: '#F1F5F9', bold: true, alignment: 'center', fontSize: 6.5, color: '#0F172A' },
           { text: pctStr(blk.subtotalPct), fillColor: '#F1F5F9', bold: true, alignment: 'center', fontSize: 6.5, color: '#0F172A' }
         ]);
       });
       natureBody.push([
-        { text: 'TOTAL GERAL (ATENDIMENTOS × NATUREZAS)', colSpan: 4, fillColor: '#E2E8F0', bold: true, fontSize: 7 },
+        { text: 'TOTAL GERAL DE NATUREZAS ATENDIDAS (RAIs registrados: ' + summary.total + ')', colSpan: 4, fillColor: '#E2E8F0', bold: true, fontSize: 7 },
         {}, {}, {},
-        { text: String(summary.total), fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 },
         { text: String(summary.totalConcurrent), fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 },
         { text: summary.totalConcurrent ? '100,0%' : '0,0%', fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 }
       ]);
 
+      const raiPdfNote = 'Número de atendimentos foi ' + summary.total + ', dado pelo número de RAIs registrados, enquanto houveram ' + summary.totalConcurrent + ' naturezas atendidas.' + (summary.multiNatureOccs > 0 ? ' (' + summary.multiNatureOccs + ' ocorrência(s) possuíam mais de uma natureza e todas foram mencionadas e contabilizadas abaixo.)' : '');
+
       const contentBlocks = [
         { table: { headerRows: 1, dontBreakRows: true, widths: mainWidths, body }, layout: 'lightHorizontalLines' },
-        { text: 'QUADRO RESUMO — QUANTITATIVO DE ATENDIMENTOS E NATUREZAS', fontSize: 9.5, bold: true, margin: [0, 14, 0, 2] },
-        { text: 'Total de Atendimentos: ' + summary.total + ' | Total de Naturezas (incl. concorrentes): ' + summary.totalConcurrent, fontSize: 7, color: '#475569', margin: [0, 0, 0, 6] },
-        { table: { headerRows: 1, dontBreakRows: true, widths: isL ? [230, 72, 72, 48] : ['*', 62, 62, 40], body: groupBody }, layout: 'lightHorizontalLines', margin: [0, 0, 0, 10] },
-        { table: { headerRows: 1, dontBreakRows: true, widths: isL ? [115, 44, 105, '*', 42, 48, 38] : [82, 38, 72, '*', 32, 38, 30], body: natureBody }, layout: 'lightHorizontalLines' }
+        { text: 'QUADRO RESUMO — QUANTITATIVO DE NATUREZAS ATENDIDAS', fontSize: 9.5, bold: true, margin: [0, 14, 0, 2] },
+        { text: raiPdfNote, fontSize: 7.5, bold: true, color: '#0369A1', margin: [0, 0, 0, 6] },
+        { table: { headerRows: 1, dontBreakRows: true, widths: isL ? [240, 110, 48] : ['*', 95, 40], body: groupBody }, layout: 'lightHorizontalLines', margin: [0, 0, 0, 10] },
+        { table: { headerRows: 1, dontBreakRows: true, widths: isL ? [120, 46, 110, '*', 90, 38] : [86, 38, 76, '*', 76, 32], body: natureBody }, layout: 'lightHorizontalLines' }
       ];
 
       if (summary.prodTotal > 0) {
@@ -1403,7 +1502,7 @@ export function exportStandaloneSingleFileHtml(): void {
                   stack: [
                     { text: 'ALA ' + wing, fontSize: 8.5, bold: true, color: '#0F172A' },
                     { text: 'Gerado em: ' + new Date().toLocaleString('pt-BR'), fontSize: 6.5, color: '#475569', margin: [0, 2, 0, 1] },
-                    { text: 'Atendimentos: ' + summary.total + ' | Naturezas: ' + summary.totalConcurrent, fontSize: 7, bold: true, color: '#0369A1' }
+                    { text: 'Atendimentos (RAIs): ' + summary.total + ' | Naturezas: ' + summary.totalConcurrent, fontSize: 7, bold: true, color: '#0369A1' }
                   ]
                 }
               ]
@@ -1433,21 +1532,22 @@ export function exportStandaloneSingleFileHtml(): void {
       });
     });
 
-    ['fltOcc', 'fltNat', 'fltMun', 'fltStatus', 'fltDateField', 'fltStartDt', 'fltEndDt', 'fltGlobal'].forEach(id => {
+    ['fltDateField', 'fltStartDt', 'fltEndDt', 'fltGlobal'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => { currentPage = 1; if (currentData) renderAll(); });
       document.getElementById(id).addEventListener('change', () => { currentPage = 1; if (currentData) renderAll(); });
     });
 
     document.getElementById('btnClearFilters').onclick = () => {
-      document.getElementById('fltOcc').value = '';
-      document.getElementById('fltNat').value = '';
-      document.getElementById('fltMun').value = 'all';
-      document.getElementById('fltStatus').value = 'all';
+      multiFilterState.occ = [];
+      multiFilterState.nat = [];
+      multiFilterState.mun = [];
+      multiFilterState.status = [];
       document.getElementById('fltDateField').value = 'any';
       document.getElementById('fltStartDt').value = '';
       document.getElementById('fltEndDt').value = '';
       document.getElementById('fltGlobal').value = '';
       currentPage = 1;
+      populateFilterOptions();
       if (currentData) renderAll();
     };
 

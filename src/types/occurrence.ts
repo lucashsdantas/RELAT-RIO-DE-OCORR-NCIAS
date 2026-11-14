@@ -41,10 +41,10 @@ export interface ReportConfig {
   repeatHeader: boolean;
   compactMode: boolean;
   confidentialityText: string;
-  filterStatus: string;
-  filterOccurrence: string;
-  filterNature: string;
-  filterMunicipality: string;
+  filterStatuses: string[];
+  filterOccurrences: string[];
+  filterNatures: string[];
+  filterMunicipalities: string[];
   filterDateField: 'any' | 'fact' | 'register';
   filterStartDateTime: string;
   filterEndDateTime: string;
