@@ -162,7 +162,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
               Pré-visualização do Documento PDF ({isLandscape ? 'Paisagem A4' : 'Retrato A4'})
             </h3>
             <p className="text-[11px] text-slate-600">
-              Navegue diretamente pelas páginas abaixo e confira o Quadro Resumo e Produtividade antes de baixar o PDF.
+              Navegue diretamente pelas páginas abaixo e confira o Quadro Resumo analítico (incluindo Produtividade) antes de baixar o PDF.
             </p>
           </div>
         </div>
@@ -215,7 +215,7 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                     {config.title || 'RELATÓRIO OPERACIONAL DE ATENDIMENTOS E OCORRÊNCIAS'}
                   </h4>
                   <p className="text-xs text-slate-600 font-medium">
-                    {config.subtitle || '4º Batalhão de Bombeiros Militar — Controle Operacional'}
+                    {config.subtitle || '4º Batalhão de Bombeiros Militar'}
                   </p>
                   <div className="pt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-700">
                     <span className="font-bold text-slate-900">
@@ -350,14 +350,25 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             {/* Quadro Resumo Logo Abaixo do Relatório */}
             {summary.totalOccurrences > 0 && (
               <div className="mt-6 pt-4 border-t border-slate-300 space-y-4">
-                <div className="space-y-1.5">
-                  <h5 className="text-xs font-extrabold text-slate-900 uppercase tracking-tight">
-                    Quadro Resumo — Quantitativo de Naturezas Atendidas
-                  </h5>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h5 className="text-xs font-extrabold text-slate-900 uppercase tracking-tight">
+                      Quadro Resumo Analítico — Quantitativo de Naturezas Atendidas
+                    </h5>
+                    <div className="flex flex-wrap items-center gap-3 text-[10.5px] font-mono">
+                      <span className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-slate-900 font-bold">
+                        RAIs Registrados: {summary.totalOccurrences}
+                      </span>
+                      <span className="px-2 py-0.5 bg-sky-50 border border-sky-300 rounded text-sky-900 font-bold">
+                        Naturezas Atendidas: {summary.totalConcurrentNatures}
+                      </span>
+                    </div>
+                  </div>
                   <div className="bg-slate-50 border border-slate-300 rounded px-3 py-2 text-[10.5px] text-slate-800 leading-relaxed">
                     <strong>Número de atendimentos foi {summary.totalOccurrences}</strong>, dado pelo número de{' '}
                     <strong>RAIs</strong> registrados, enquanto houveram{' '}
-                    <strong className="text-sky-800">{summary.totalConcurrentNatures} naturezas atendidas</strong>.
+                    <strong className="text-sky-800">{summary.totalConcurrentNatures} naturezas atendidas</strong>
+                    {' '}(incluindo ocorrências de Produtividade).
                     {summary.multiNatureOccurrencesCount > 0 && (
                       <span className="text-slate-600">
                         {' '}
@@ -478,87 +489,6 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                   </table>
                 </div>
 
-                {/* Quadro à Parte — Naturezas do Grupo Produtividade */}
-                {summary.productivityTotalCount > 0 && (
-                  <div className="pt-3 space-y-2">
-                    <div>
-                      <h5 className="text-xs font-extrabold text-slate-900 uppercase tracking-tight">
-                        Quadro à Parte — Atendimentos com Natureza de Produtividade
-                      </h5>
-                      <p className="text-[10px] text-slate-600">
-                        Total de registros de Produtividade:{' '}
-                        <strong className="font-mono text-slate-900">{summary.productivityTotalCount}</strong>
-                        {' · '}
-                        Exclusivas (só Produtividade):{' '}
-                        <strong className="font-mono text-slate-900">{summary.productivityExclusiveCount}</strong>
-                        {' · '}
-                        Concorrentes (com outra natureza):{' '}
-                        <strong className="font-mono text-slate-900">{summary.productivityMixedCount}</strong>
-                      </p>
-                    </div>
-
-                    <div className="border border-slate-300 overflow-hidden">
-                      <table className="w-full text-left border-collapse text-[10px]">
-                        <thead>
-                          <tr className="bg-slate-800 text-white">
-                            <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-20">CÓDIGO</th>
-                            <th className="py-1.5 px-2 font-bold border-r border-slate-700 w-28">SUB-GRUPO</th>
-                            <th className="py-1.5 px-2 font-bold border-r border-slate-700">NATUREZA DE PRODUTIVIDADE</th>
-                            <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-20">EXCLUSIVA</th>
-                            <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-24">COM OUTRA NAT.</th>
-                            <th className="py-1.5 px-2 font-bold border-r border-slate-700 text-center w-20">ATENDIMENTOS</th>
-                            <th className="py-1.5 px-2 font-bold text-center w-14">%</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {summary.productivitySummary.map((p, idx) => (
-                            <tr
-                              key={p.id}
-                              className={`border-t border-slate-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}
-                            >
-                              <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-900">
-                                {p.code}
-                              </td>
-                              <td className="py-1 px-2 border-r border-slate-200 text-slate-700 font-medium">
-                                {p.subGroup}
-                              </td>
-                              <td className="py-1 px-2 border-r border-slate-200 text-slate-900">
-                                {p.nature}
-                              </td>
-                              <td className="py-1 px-2 border-r border-slate-200 text-center font-mono text-slate-700 tabular-nums">
-                                {p.exclusiveCount}
-                              </td>
-                              <td className="py-1 px-2 border-r border-slate-200 text-center font-mono text-slate-700 tabular-nums">
-                                {p.mixedCount}
-                              </td>
-                              <td className="py-1 px-2 border-r border-slate-200 text-center font-mono font-bold text-slate-900 tabular-nums">
-                                {p.totalCount}
-                              </td>
-                              <td className="py-1 px-2 text-center font-mono text-slate-600 tabular-nums">
-                                {formatPct(p.percentage)}
-                              </td>
-                            </tr>
-                          ))}
-                          <tr className="border-t-2 border-slate-900 bg-slate-200 font-bold text-slate-900">
-                            <td colSpan={3} className="py-1.5 px-2 border-r border-slate-300">
-                              TOTAL GERAL DE PRODUTIVIDADE
-                            </td>
-                            <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono tabular-nums">
-                              {summary.productivityExclusiveCount}
-                            </td>
-                            <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono tabular-nums">
-                              {summary.productivityMixedCount}
-                            </td>
-                            <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono tabular-nums">
-                              {summary.productivityTotalCount}
-                            </td>
-                            <td className="py-1.5 px-2 text-center font-mono tabular-nums">100,0%</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -566,7 +496,8 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           {/* Rodapé da Folha */}
           <div className="mt-8 pt-2.5 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500">
             <span className="truncate pr-4">
-              {config.confidentialityText || 'DOCUMENTO DE USO CORPORATIVO / RESERVADO'}
+              {config.confidentialityText ||
+                'RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEMA DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI'}
             </span>
             <span className="font-mono shrink-0">
               Página <strong className="text-slate-900">{safePage}</strong> de{' '}

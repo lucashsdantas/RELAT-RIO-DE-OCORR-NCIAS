@@ -56,7 +56,7 @@ export function classifyFilteredRows(
       ? NATURE_CATALOG.find((e) => e.id === overrideId) || null
       : null;
 
-    const hasMultiple = primaryPool.length > 1;
+    const hasMultiple = candidates.length > 1;
 
     if (overriddenEntry) {
       return {
@@ -224,20 +224,22 @@ export function buildOccurrenceSummary(
       }).count += 1;
     }
 
-    // 3. Contabilização de Todas as Naturezas Atendidas no Quadro Principal
-    //    - Se houver 2+ naturezas operacionais detectadas (não-Produtividade), todas são contabilizadas (ex: Incêndio + Resgate = 2).
-    //    - Se houver 0 ou 1 natureza operacional e o operador escolheu manualmente uma natureza no catálogo, respeita a escolha manual.
-    //    - Se a ocorrência for exclusiva de Produtividade, contabiliza a(s) natureza(s) de Produtividade detectada(s).
-    const concurrentList: NatureCatalogEntry[] =
-      item.isManuallyOverridden && item.selectedEntry && item.operationalCandidates.length <= 1
-        ? [item.selectedEntry]
-        : item.operationalCandidates.length > 0
-        ? [...item.operationalCandidates]
-        : item.productivityEntries.length > 0
-        ? [...item.productivityEntries]
-        : item.selectedEntry
-        ? [item.selectedEntry]
-        : [];
+    // 3. Contabilização de Todas as Naturezas Atendidas no Quadro Principal (incluindo Produtividade)
+    //    - Se houver 2+ naturezas detectadas (operacionais e/ou Produtividade), todas são contabilizadas no quadro analítico.
+    //    - Se houver ajuste manual para uma natureza fora das candidatas ou em item único/sem classificação, respeita a escolha manual.
+    const isCustomManualReplacement =
+      item.isManuallyOverridden &&
+      item.selectedEntry &&
+      (item.candidates.length <= 1 ||
+        !item.candidates.some((c) => c.id === item.selectedEntry!.id));
+
+    const concurrentList: NatureCatalogEntry[] = isCustomManualReplacement
+      ? [item.selectedEntry!]
+      : item.candidates.length > 0
+      ? [...item.candidates]
+      : item.selectedEntry
+      ? [item.selectedEntry]
+      : [];
 
     if (concurrentList.length > 1) {
       multiNatureOccurrencesCount += 1;

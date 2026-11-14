@@ -64,8 +64,8 @@ function getDefaultShiftRange(): { start: string; end: string } {
 function loadSavedConfig(defaultRange: { start: string; end: string }): ReportConfig {
   const baseConfig: ReportConfig = {
     title: 'RELATÓRIO OPERACIONAL DE ATENDIMENTOS E OCORRÊNCIAS',
-    subtitle: '4º Batalhão de Bombeiros Militar — Controle Operacional',
-    department: 'B-3 / Coordenação Operacional',
+    subtitle: '4º Batalhão de Bombeiros Militar',
+    department: 'SOP',
     serviceWing: 'A',
     startDateTime: defaultRange.start,
     endDateTime: defaultRange.end,
@@ -76,7 +76,7 @@ function loadSavedConfig(defaultRange: { start: string; end: string }): ReportCo
     repeatHeader: true,
     compactMode: false,
     confidentialityText:
-      'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE VIA SISTEMA DE RELATÓRIOS',
+      'RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEMA DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI',
     filterStatuses: [],
     filterOccurrences: [],
     filterNatures: [],
@@ -91,9 +91,33 @@ function loadSavedConfig(defaultRange: { start: string; end: string }): ReportCo
     const raw = localStorage.getItem(STORAGE_CONFIG_KEY);
     if (!raw) return baseConfig;
     const parsed = JSON.parse(raw);
+
+    const legacySubtitles = new Set([
+      '4º Batalhão de Bombeiros Militar — Controle Operacional',
+    ]);
+    const legacyDepartments = new Set(['B-3 / Coordenação Operacional']);
+    const legacyFooters = new Set([
+      'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE VIA SISTEMA DE RELATÓRIOS',
+      'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE',
+      'DOCUMENTO DE USO CORPORATIVO / RESERVADO',
+      'RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEME DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI',
+    ]);
+
     return {
       ...baseConfig,
       ...parsed,
+      subtitle:
+        parsed.subtitle && !legacySubtitles.has(parsed.subtitle)
+          ? parsed.subtitle
+          : baseConfig.subtitle,
+      department:
+        parsed.department && !legacyDepartments.has(parsed.department)
+          ? parsed.department
+          : baseConfig.department,
+      confidentialityText:
+        parsed.confidentialityText && !legacyFooters.has(parsed.confidentialityText)
+          ? parsed.confidentialityText
+          : baseConfig.confidentialityText,
       selectedLogoId: parsed.selectedLogoId || DEFAULT_LOGO_ID,
       logoBase64: null,
       filterStatuses: [],
@@ -678,7 +702,7 @@ export default function App() {
             </h1>
             <p className="text-xs text-slate-300 max-w-3xl">
               Cole uma ou várias páginas de ocorrências, escolha a Ala de Serviço (A, B, C ou D),
-              ajuste o logotipo e os filtros e gere o PDF com Quadro Resumo operacional e Produtividade.
+              ajuste o logotipo e os filtros e gere o PDF com Quadro Resumo analítico de naturezas (incluindo Produtividade).
             </p>
           </div>
 

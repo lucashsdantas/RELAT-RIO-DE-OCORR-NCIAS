@@ -3286,67 +3286,62 @@ export function detectNatureCandidates(rawText: string): NatureCatalogEntry[] {
     }
   };
 
-  // 1. Procura códigos pontuados de Defesa Civil (ex: 5.1.3.2.1.4)
-  const dottedMatches = text.match(/\b5(?:\.\d+){2,6}\b/g) || [];
-  for (const code of dottedMatches) {
-    const matches = NATURE_CATALOG.filter((e) => e.code === code);
-    matches.forEach(addEntry);
-  }
+  const matchCodesInText = (segmentText: string): boolean => {
+    let matchedAny = false;
+    const normRaw = normalizeNatureText(segmentText);
 
-  // 2. Procura códigos numéricos de 5 ou 6 dígitos (ex: 30113, 61201, 100101)
-  const normRaw = normalizeNatureText(text);
-  const fiveDigitMatches = text.match(/\b\d{5,6}\b/g) || [];
-  for (const code of fiveDigitMatches) {
-    const matches = NATURE_CATALOG.filter((e) => e.code === code);
-    if (matches.length === 1) {
-      addEntry(matches[0]);
-    } else if (matches.length > 1) {
-      // Desambigua usando texto (ex: 90101 pode ser HIDRANTES ou SERVIÇO ÁEREO; 99999 tem 4 tipos)
-      const scored = matches
-        .map((m) => {
-          let score = 0;
-          if (normRaw.includes(normalizeNatureText(m.nature))) score += 10;
-          if (normRaw.includes(normalizeNatureText(m.group))) score += 5;
-          if (normRaw.includes(normalizeNatureText(m.subGroup))) score += 3;
-          return { m, score };
-        })
-        .sort((a, b) => b.score - a.score);
-
-      if (scored[0].score > 0) {
-        // Adiciona os empatados com pontuação máxima
-        const topScore = scored[0].score;
-        scored.filter((s) => s.score === topScore).forEach((s) => addEntry(s.m));
-      } else {
+    // 1. Procura códigos pontuados de Defesa Civil (ex: 5.1.3.2.1.4)
+    const dottedMatches = segmentText.match(/\b5(?:\.\d+){2,6}\b/g) || [];
+    for (const code of dottedMatches) {
+      const matches = NATURE_CATALOG.filter((e) => e.code === code);
+      if (matches.length > 0) {
         matches.forEach(addEntry);
+        matchedAny = true;
       }
     }
-  }
 
-  if (found.length > 0) {
-    return found;
-  }
+    // 2. Procura códigos numéricos de 5 ou 6 dígitos (ex: 30113, 61201, 100101)
+    const digitMatches = segmentText.match(/\b\d{5,6}\b/g) || [];
+    for (const code of digitMatches) {
+      const matches = NATURE_CATALOG.filter((e) => e.code === code);
+      if (matches.length === 1) {
+        addEntry(matches[0]);
+        matchedAny = true;
+      } else if (matches.length > 1) {
+        const scored = matches
+          .map((m) => {
+            let score = 0;
+            if (normRaw.includes(normalizeNatureText(m.nature))) score += 10;
+            if (normRaw.includes(normalizeNatureText(m.group))) score += 5;
+            if (normRaw.includes(normalizeNatureText(m.subGroup))) score += 3;
+            return { m, score };
+          })
+          .sort((a, b) => b.score - a.score);
 
-  // 3. Sem códigos numéricos: divide por separadores de múltiplas naturezas e compara por texto
-  const segments = text
-    .split(/[;|\n+]+|\s+\/\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length >= 3);
+        if (scored[0].score > 0) {
+          const topScore = scored[0].score;
+          scored.filter((s) => s.score === topScore).forEach((s) => addEntry(s.m));
+        } else {
+          matches.forEach(addEntry);
+        }
+        matchedAny = true;
+      }
+    }
 
-  const targets = segments.length > 0 ? segments : [text];
+    return matchedAny;
+  };
 
-  for (const seg of targets) {
+  const matchByTextSegment = (seg: string) => {
     const normSeg = normalizeNatureText(seg);
-    if (!normSeg) continue;
+    if (!normSeg) return;
 
-    // Correspondência exata de natureza
     const exact = NATURE_CATALOG.filter((e) => normalizeNatureText(e.nature) === normSeg);
     if (exact.length > 0) {
       exact.forEach(addEntry);
-      continue;
+      return;
     }
 
-    // Correspondência parcial forte (ex: "QUEDA DE MOTO" ou "RESGATE / QUEDA DE MOTO")
-    let bestMatches: { entry: NatureCatalogEntry; score: number }[] = [];
+    const bestMatches: { entry: NatureCatalogEntry; score: number }[] = [];
     for (const entry of NATURE_CATALOG) {
       const normNat = normalizeNatureText(entry.nature);
       const normSub = normalizeNatureText(entry.subGroup);
@@ -3374,6 +3369,41 @@ export function detectNatureCandidates(rawText: string): NatureCatalogEntry[] {
         .filter((x) => x.score >= maxScore - 1)
         .slice(0, 3)
         .forEach((x) => addEntry(x.entry));
+    }
+  };
+
+  // Divide primeiro por separadores explícitos de múltiplas naturezas (; | quebra de linha +)
+  const rawSegments = text
+    .split(/[;|\n+]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 3);
+
+  const segmentsToProcess = rawSegments.length > 0 ? rawSegments : [text];
+
+  for (const seg of segmentsToProcess) {
+    const hadCodeMatch = matchCodesInText(seg);
+    if (!hadCodeMatch) {
+      const subSegs = seg
+        .split(/\s+\/\s+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 3);
+      if (subSegs.length > 1) {
+        // Primeiro tenta o segmento inteiro (caso seja "GRUPO / NATUREZA"), se não achar exato, tenta sub-segmentos
+        const normFull = normalizeNatureText(seg);
+        const exactFull = NATURE_CATALOG.filter((e) => normalizeNatureText(e.nature) === normFull);
+        if (exactFull.length > 0) {
+          exactFull.forEach(addEntry);
+        } else {
+          // Tenta pontuação no segmento completo e também por sub-segmentos
+          const beforeCount = found.length;
+          matchByTextSegment(seg);
+          if (found.length === beforeCount) {
+            subSegs.forEach(matchByTextSegment);
+          }
+        }
+      } else {
+        matchByTextSegment(seg);
+      }
     }
   }
 

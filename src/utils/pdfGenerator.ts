@@ -216,7 +216,8 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
   };
 
   const raiSummaryText =
-    `Número de atendimentos foi ${summary.totalOccurrences}, dado pelo número de RAIs registrados, enquanto houveram ${summary.totalConcurrentNatures} naturezas atendidas.` +
+    `RAIs Registrados (Atendimentos): ${summary.totalOccurrences}   |   Naturezas Atendidas: ${summary.totalConcurrentNatures}\n` +
+    `Número de atendimentos foi ${summary.totalOccurrences}, dado pelo número de RAIs registrados, enquanto houveram ${summary.totalConcurrentNatures} naturezas atendidas (incluindo ocorrências de Produtividade).` +
     (summary.multiNatureOccurrencesCount > 0
       ? ` (${summary.multiNatureOccurrencesCount} ocorrência(s) possuíam mais de uma natureza e todas foram mencionadas e contabilizadas abaixo.)`
       : '');
@@ -227,7 +228,7 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
       unbreakable: true,
       stack: [
         {
-          text: 'QUADRO RESUMO — QUANTITATIVO DE NATUREZAS ATENDIDAS',
+          text: 'QUADRO RESUMO ANALÍTICO — QUANTITATIVO DE NATUREZAS ATENDIDAS',
           fontSize: 9.5,
           bold: true,
           color: '#0F172A',
@@ -261,72 +262,6 @@ function buildSummaryContentBlocks(summary: OccurrenceSummaryReport, isLandscape
       layout: summaryTableLayout,
     },
   ];
-
-  // Quadro à parte — Naturezas de Produtividade
-  if (summary.productivityTotalCount > 0) {
-    const prodBody: any[] = [
-      [
-        { text: 'CÓDIGO', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
-        { text: 'SUB-GRUPO', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'left' },
-        { text: 'NATUREZA DE PRODUTIVIDADE', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'left' },
-        { text: 'EXCLUSIVA', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
-        { text: 'COM OUTRA NAT.', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
-        { text: 'ATENDIMENTOS', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
-        { text: '%', style: 'tableHeader', fillColor: '#1E293B', color: '#FFFFFF', alignment: 'center' },
-      ],
-    ];
-
-    summary.productivitySummary.forEach((p, idx) => {
-      const fill = idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
-      prodBody.push([
-        { text: p.code, style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
-        { text: p.subGroup, style: 'tableCell', fillColor: fill, color: '#334155' },
-        { text: p.nature, style: 'tableCell', fillColor: fill, color: '#0F172A' },
-        { text: String(p.exclusiveCount), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#334155' },
-        { text: String(p.mixedCount), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#334155' },
-        { text: String(p.totalCount), style: 'tableCell', fillColor: fill, alignment: 'center', bold: true, color: '#0F172A' },
-        { text: pct(p.percentage), style: 'tableCell', fillColor: fill, alignment: 'center', color: '#475569' },
-      ]);
-    });
-
-    prodBody.push([
-      { text: 'TOTAL GERAL DE PRODUTIVIDADE', colSpan: 3, style: 'tableCell', fillColor: '#E2E8F0', bold: true, color: '#0F172A' },
-      {},
-      {},
-      { text: String(summary.productivityExclusiveCount), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
-      { text: String(summary.productivityMixedCount), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
-      { text: String(summary.productivityTotalCount), style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
-      { text: '100,0%', style: 'tableCell', fillColor: '#E2E8F0', bold: true, alignment: 'center', color: '#0F172A' },
-    ]);
-
-    blocks.push({
-      margin: [0, 14, 0, 0],
-      unbreakable: true,
-      stack: [
-        {
-          text: 'QUADRO À PARTE — ATENDIMENTOS COM NATUREZA DE PRODUTIVIDADE',
-          fontSize: 9,
-          bold: true,
-          color: '#0F172A',
-        },
-        {
-          text: `Total de registros de Produtividade: ${summary.productivityTotalCount} | Exclusivas (só Produtividade): ${summary.productivityExclusiveCount} | Em ocorrências mistas: ${summary.productivityMixedCount}`,
-          fontSize: 7,
-          color: '#475569',
-          margin: [0, 1, 0, 6],
-        },
-        {
-          table: {
-            headerRows: 1,
-            dontBreakRows: true,
-            widths: isLandscape ? [48, 85, '*', 48, 62, 58, 38] : [42, 64, '*', 40, 50, 48, 30],
-            body: prodBody,
-          },
-          layout: summaryTableLayout,
-        },
-      ],
-    });
-  }
 
   return blocks;
 }
@@ -506,7 +441,7 @@ export function buildPdfDocDefinition(
           characterSpacing: 0.2,
         },
         {
-          text: config.subtitle || '4º Batalhão de Bombeiros Militar — Controle Operacional',
+          text: config.subtitle || '4º Batalhão de Bombeiros Militar',
           fontSize: 7.5,
           color: '#475569',
           margin: [0, 2, 0, 2],
@@ -625,7 +560,7 @@ export function buildPdfDocDefinition(
                 width: '*',
                 text:
                   config.confidentialityText ||
-                  'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE',
+                  'RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEMA DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI',
                 fontSize: 6.5,
                 color: '#64748B',
               },

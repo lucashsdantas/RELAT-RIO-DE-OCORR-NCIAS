@@ -362,7 +362,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 type="text"
                 value={config.department}
                 onChange={(e) => onChangeConfig({ department: e.target.value })}
-                placeholder="Ex: B-3 / Coordenação Operacional"
+                placeholder="Ex: SOP"
                 className="w-full text-xs p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white text-slate-800"
               />
             </div>
@@ -370,13 +370,14 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
           <div>
             <label htmlFor="report-confidentiality" className="text-xs font-semibold text-slate-700 block mb-1">
-              Texto de Rodapé (Confidencialidade)
+              Texto do Rodapé
             </label>
             <input
               id="report-confidentiality"
               type="text"
               value={config.confidentialityText}
               onChange={(e) => onChangeConfig({ confidentialityText: e.target.value })}
+              placeholder="RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEMA DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI"
               className="w-full text-xs p-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white text-slate-800"
             />
           </div>

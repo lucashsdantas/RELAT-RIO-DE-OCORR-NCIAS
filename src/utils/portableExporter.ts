@@ -4,8 +4,7 @@ import { NATURE_CATALOG } from './natureCatalog';
 /**
  * Gera e realiza o download da aplicação completa em um único arquivo HTML autônomo (index.html).
  * Inclui o catálogo completo de naturezas, upload/seleção de logos em localStorage, coleta multipágina,
- * filtros completos, paginação direta na página principal, conciliação de naturezas concorrentes e
- * Quadro à Parte de Produtividade no PDF.
+ * filtros multiseleção, paginação direta na página principal e Quadro Resumo analítico com Produtividade.
  */
 export function exportStandaloneSingleFileHtml(): void {
   const serializedCatalog = JSON.stringify(NATURE_CATALOG);
@@ -148,7 +147,15 @@ export function exportStandaloneSingleFileHtml(): void {
         </div>
         <div>
           <label class="text-xs font-bold text-slate-800 block mb-1">Subtítulo / Unidade</label>
-          <input type="text" id="cfgSubtitle" value="4º Batalhão de Bombeiros Militar — Controle Operacional" class="w-full text-xs p-2 bg-slate-50 border border-slate-300 rounded-lg">
+          <input type="text" id="cfgSubtitle" value="4º Batalhão de Bombeiros Militar" class="w-full text-xs p-2 bg-slate-50 border border-slate-300 rounded-lg">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-800 block mb-1">Seção / Observação do Cabeçalho</label>
+          <input type="text" id="cfgDepartment" value="SOP" placeholder="Ex: SOP" class="w-full text-xs p-2 bg-slate-50 border border-slate-300 rounded-lg">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-800 block mb-1">Texto do Rodapé</label>
+          <input type="text" id="cfgFooter" value="RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEMA DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI" class="w-full text-xs p-2 bg-slate-50 border border-slate-300 rounded-lg">
         </div>
       </div>
 
@@ -365,7 +372,13 @@ export function exportStandaloneSingleFileHtml(): void {
           if (parsed.start) document.getElementById('cfgStart').value = parsed.start;
           if (parsed.end) document.getElementById('cfgEnd').value = parsed.end;
           if (parsed.title !== undefined) document.getElementById('cfgTitle').value = parsed.title;
-          if (parsed.subtitle !== undefined) document.getElementById('cfgSubtitle').value = parsed.subtitle;
+          if (parsed.subtitle !== undefined && parsed.subtitle !== '4º Batalhão de Bombeiros Militar — Controle Operacional') {
+            document.getElementById('cfgSubtitle').value = parsed.subtitle;
+          }
+          if (parsed.department !== undefined) document.getElementById('cfgDepartment').value = parsed.department;
+          if (parsed.footer !== undefined && parsed.footer !== 'RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEME DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI') {
+            document.getElementById('cfgFooter').value = parsed.footer;
+          }
           if (parsed.orientation) document.getElementById('cfgOrientation').value = parsed.orientation;
           if (parsed.selectedLogoId) selectedLogoId = parsed.selectedLogoId;
         }
@@ -385,6 +398,8 @@ export function exportStandaloneSingleFileHtml(): void {
           end: document.getElementById('cfgEnd').value,
           title: document.getElementById('cfgTitle').value,
           subtitle: document.getElementById('cfgSubtitle').value,
+          department: document.getElementById('cfgDepartment').value,
+          footer: document.getElementById('cfgFooter').value,
           orientation: document.getElementById('cfgOrientation').value,
           selectedLogoId: selectedLogoId
         };
@@ -627,32 +642,34 @@ export function exportStandaloneSingleFileHtml(): void {
       const found = [];
       const added = new Set();
       const add = e => { if (!added.has(e.id)) { added.add(e.id); found.push(e); } };
-      const normRaw = normText(text);
 
-      (text.match(/\\b5(?:\\.\\d+){2,6}\\b/g) || []).forEach(code => {
-        NATURE_CATALOG.filter(e => e.code === code).forEach(add);
-      });
+      const matchCodes = segText => {
+        let matched = false;
+        const normRaw = normText(segText);
+        (segText.match(/\\b5(?:\\.\\d+){2,6}\\b/g) || []).forEach(code => {
+          const ms = NATURE_CATALOG.filter(e => e.code === code);
+          if (ms.length) { ms.forEach(add); matched = true; }
+        });
+        (segText.match(/\\b\\d{5,6}\\b/g) || []).forEach(code => {
+          const matches = NATURE_CATALOG.filter(e => e.code === code);
+          if (matches.length === 1) { add(matches[0]); matched = true; }
+          else if (matches.length > 1) {
+            const scored = matches.map(m => {
+              let s = 0;
+              if (normRaw.includes(normText(m.nature))) s += 10;
+              if (normRaw.includes(normText(m.group))) s += 5;
+              if (normRaw.includes(normText(m.subGroup))) s += 3;
+              return { m, s };
+            }).sort((a, b) => b.s - a.s);
+            if (scored[0].s > 0) scored.filter(x => x.s === scored[0].s).forEach(x => add(x.m));
+            else matches.forEach(add);
+            matched = true;
+          }
+        });
+        return matched;
+      };
 
-      (text.match(/\\b\\d{5,6}\\b/g) || []).forEach(code => {
-        const matches = NATURE_CATALOG.filter(e => e.code === code);
-        if (matches.length === 1) add(matches[0]);
-        else if (matches.length > 1) {
-          const scored = matches.map(m => {
-            let s = 0;
-            if (normRaw.includes(normText(m.nature))) s += 10;
-            if (normRaw.includes(normText(m.group))) s += 5;
-            if (normRaw.includes(normText(m.subGroup))) s += 3;
-            return { m, s };
-          }).sort((a, b) => b.s - a.s);
-          if (scored[0].s > 0) scored.filter(x => x.s === scored[0].s).forEach(x => add(x.m));
-          else matches.forEach(add);
-        }
-      });
-
-      if (found.length > 0) return found;
-
-      const segs = text.split(/[;|\\n+]+|\\s+\\/\\s+/).map(s => s.trim()).filter(s => s.length >= 3);
-      (segs.length ? segs : [text]).forEach(seg => {
+      const matchByText = seg => {
         const ns = normText(seg);
         if (!ns) return;
         const exact = NATURE_CATALOG.filter(e => normText(e.nature) === ns);
@@ -670,6 +687,24 @@ export function exportStandaloneSingleFileHtml(): void {
         if (scored.length) {
           scored.sort((a, b) => b.sc - a.sc);
           scored.filter(x => x.sc >= scored[0].sc - 1).slice(0, 3).forEach(x => add(x.e));
+        }
+      };
+
+      const rawSegs = text.split(/[;|\\n+]+/).map(s => s.trim()).filter(s => s.length >= 3);
+      (rawSegs.length ? rawSegs : [text]).forEach(seg => {
+        if (!matchCodes(seg)) {
+          const subSegs = seg.split(/\\s+\\/\\s+/).map(s => s.trim()).filter(s => s.length >= 3);
+          if (subSegs.length > 1) {
+            const exactFull = NATURE_CATALOG.filter(e => normText(e.nature) === normText(seg));
+            if (exactFull.length) exactFull.forEach(add);
+            else {
+              const before = found.length;
+              matchByText(seg);
+              if (found.length === before) subSegs.forEach(matchByText);
+            }
+          } else {
+            matchByText(seg);
+          }
         }
       });
       return found;
@@ -914,7 +949,7 @@ export function exportStandaloneSingleFileHtml(): void {
         return {
           idx, occNum, raw, candidates, operational, prodList, selected,
           isExclusiveProd: prodList.length > 0 && operational.length === 0,
-          hasMultiple: primaryPool.length > 1,
+          hasMultiple: candidates.length > 1,
           isUnclassified: !selected,
           isManual: Boolean(ovEntry)
         };
@@ -935,7 +970,6 @@ export function exportStandaloneSingleFileHtml(): void {
       items.forEach(it => {
         if (it.hasMultiple && !it.isManual) multiPending++;
 
-        // Quadro à Parte Produtividade
         if (it.prodList.length > 0) {
           const isMix = it.operational.length > 0;
           it.prodList.forEach(pe => {
@@ -962,10 +996,11 @@ export function exportStandaloneSingleFileHtml(): void {
           ensureNat({ id: 'UNCLASS__' + normText(it.raw), code: '—', group: g, subGroup: 'A DEFINIR', nature: it.raw || 'Sem natureza' }).count++;
         }
 
-        // Todas as Naturezas Atendidas (múltiplas naturezas somam todas na tabela)
-        const concList = (it.isManual && it.selected && it.operational.length <= 1)
+        // Todas as Naturezas Atendidas no Quadro Analítico (incluindo Produtividade)
+        const isCustomManual = it.isManual && it.selected && (it.candidates.length <= 1 || !it.candidates.some(c => c.id === it.selected.id));
+        const concList = isCustomManual
           ? [it.selected]
-          : (it.operational.length ? it.operational : (it.prodList.length ? it.prodList : (it.selected ? [it.selected] : [])));
+          : (it.candidates.length ? it.candidates : (it.selected ? [it.selected] : []));
         if (concList.length > 1) multiNatureOccs++;
         if (concList.length) {
           concList.forEach(ce => {
@@ -1223,6 +1258,8 @@ export function exportStandaloneSingleFileHtml(): void {
       const end = fmtBrDate(document.getElementById('cfgEnd').value);
       const title = document.getElementById('cfgTitle').value;
       const subtitle = document.getElementById('cfgSubtitle').value;
+      const department = (document.getElementById('cfgDepartment').value || '').trim();
+      const footerText = (document.getElementById('cfgFooter').value || '').trim() || 'RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEMA DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI';
       const logoSrc = getActiveLogoImgSrc();
 
       document.getElementById('docHeaderPreview').innerHTML =
@@ -1231,7 +1268,7 @@ export function exportStandaloneSingleFileHtml(): void {
           '<div>' +
             '<h4 class="text-sm font-extrabold text-slate-900">' + title + '</h4>' +
             '<p class="text-xs text-slate-600">' + subtitle + '</p>' +
-            '<p class="text-[11px] font-semibold text-slate-800 mt-1">Ala de Serviço: Ala ' + wing + ' | Período: ' + start + ' a ' + end + '</p>' +
+            '<p class="text-[11px] font-semibold text-slate-800 mt-1">Ala de Serviço: Ala ' + wing + ' | Período: ' + start + ' a ' + end + (department ? (' | ' + department) : '') + '</p>' +
           '</div>' +
         '</div>' +
         '<div class="text-right text-[11px]">' +
@@ -1277,8 +1314,9 @@ export function exportStandaloneSingleFileHtml(): void {
       document.getElementById('previewTable').innerHTML = html;
 
       const pctStr = v => v.toFixed(1).replace('.', ',') + '%';
-      let sumHtml = '<div class="space-y-1.5"><h5 class="text-xs font-extrabold text-slate-900 uppercase">Quadro Resumo — Quantitativo de Naturezas Atendidas</h5>' +
-        '<div class="bg-slate-50 border border-slate-300 rounded px-3 py-2 text-[10.5px] text-slate-800"><strong>Número de atendimentos foi ' + summary.total + '</strong>, dado pelo número de <strong>RAIs</strong> registrados, enquanto houveram <strong class="text-sky-800">' + summary.totalConcurrent + ' naturezas atendidas</strong>.' +
+      let sumHtml = '<div class="space-y-2"><div class="flex flex-wrap items-center justify-between gap-2"><h5 class="text-xs font-extrabold text-slate-900 uppercase">Quadro Resumo Analítico — Quantitativo de Naturezas Atendidas</h5>' +
+        '<div class="flex flex-wrap items-center gap-2 text-[10.5px] font-mono"><span class="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded font-bold">RAIs Registrados: ' + summary.total + '</span><span class="px-2 py-0.5 bg-sky-50 border border-sky-300 rounded text-sky-900 font-bold">Naturezas Atendidas: ' + summary.totalConcurrent + '</span></div></div>' +
+        '<div class="bg-slate-50 border border-slate-300 rounded px-3 py-2 text-[10.5px] text-slate-800"><strong>Número de atendimentos foi ' + summary.total + '</strong>, dado pelo número de <strong>RAIs</strong> registrados, enquanto houveram <strong class="text-sky-800">' + summary.totalConcurrent + ' naturezas atendidas</strong> (incluindo ocorrências de Produtividade).' +
         (summary.multiNatureOccs > 0 ? ' (' + summary.multiNatureOccs + ' ocorrência(s) possuíam mais de uma natureza e todas foram mencionadas e contabilizadas abaixo.)' : '') +
         '</div></div>';
 
@@ -1297,17 +1335,8 @@ export function exportStandaloneSingleFileHtml(): void {
       });
       sumHtml += '<tr class="bg-slate-200 font-bold"><td colspan="4" class="p-1.5 border border-slate-300">TOTAL GERAL DE NATUREZAS ATENDIDAS (RAIs registrados: ' + summary.total + ')</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.totalConcurrent + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + (summary.totalConcurrent ? '100,0%' : '0,0%') + '</td></tr></tbody></table>';
 
-      if (summary.prodTotal > 0) {
-        sumHtml += '<div class="pt-3 border-t border-slate-300 space-y-2"><div><h5 class="text-xs font-extrabold text-slate-900 uppercase">Quadro à Parte — Atendimentos com Natureza de Produtividade</h5><p class="text-[10px] text-slate-600">Total de Produtividade: ' + summary.prodTotal + ' | Exclusivas: ' + summary.prodExcl + ' | Mistas (com outra natureza): ' + summary.prodMixed + '</p></div>';
-        sumHtml += '<table class="w-full text-left text-[10px] border-collapse border border-slate-300"><thead class="bg-slate-800 text-white"><tr><th class="p-1.5 border border-slate-700 text-center">CÓDIGO</th><th class="p-1.5 border border-slate-700">SUB-GRUPO</th><th class="p-1.5 border border-slate-700">NATUREZA DE PRODUTIVIDADE</th><th class="p-1.5 border border-slate-700 text-center">EXCLUSIVA</th><th class="p-1.5 border border-slate-700 text-center">COM OUTRA NAT.</th><th class="p-1.5 border border-slate-700 text-center">ATENDIMENTOS</th><th class="p-1.5 border border-slate-700 text-center">%</th></tr></thead><tbody>';
-        summary.byProd.forEach((p, i) => {
-          sumHtml += '<tr class="' + (i%2===0?'bg-white':'bg-slate-50') + '"><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + p.code + '</td><td class="p-1 border border-slate-200">' + p.subGroup + '</td><td class="p-1 border border-slate-200">' + p.nature + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + p.exclusiveCount + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + p.mixedCount + '</td><td class="p-1 border border-slate-200 text-center font-mono font-bold">' + p.totalCount + '</td><td class="p-1 border border-slate-200 text-center font-mono">' + pctStr(p.pct) + '</td></tr>';
-        });
-        sumHtml += '<tr class="bg-slate-200 font-bold"><td colspan="3" class="p-1.5 border border-slate-300">TOTAL GERAL DE PRODUTIVIDADE</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.prodExcl + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.prodMixed + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">' + summary.prodTotal + '</td><td class="p-1.5 border border-slate-300 text-center font-mono">100,0%</td></tr></tbody></table></div>';
-      }
-
       document.getElementById('summaryPreview').innerHTML = sumHtml;
-      document.getElementById('docFooterPreview').innerHTML = '<span>DOCUMENTO DE USO CORPORATIVO / RESERVADO</span><span>Página ' + currentPage + ' de ' + totalPages + '</span>';
+      document.getElementById('docFooterPreview').innerHTML = '<span class="truncate pr-4">' + footerText + '</span><span class="shrink-0">Página ' + currentPage + ' de ' + totalPages + '</span>';
       document.getElementById('rowCountLabel').textContent = filtered.length + ' de ' + currentData.rows.length + ' RAIs · ' + summary.totalConcurrent + ' naturezas atendidas';
     }
 
@@ -1320,6 +1349,8 @@ export function exportStandaloneSingleFileHtml(): void {
       const end = fmtBrDate(document.getElementById('cfgEnd').value);
       const title = document.getElementById('cfgTitle').value;
       const subtitle = document.getElementById('cfgSubtitle').value;
+      const department = (document.getElementById('cfgDepartment').value || '').trim();
+      const footerText = (document.getElementById('cfgFooter').value || '').trim() || 'RELATÓRIO OBTIDO ATRAVÉS DE DADOS EXTRAÍDOS DO SISTEMA DE REGISTRO DE ATENDIMENTO INTEGRADO - RAI';
       const orientation = document.getElementById('cfgOrientation').value;
       const isL = orientation === 'landscape';
       const pctStr = v => v.toFixed(1).replace('.', ',') + '%';
@@ -1426,52 +1457,18 @@ export function exportStandaloneSingleFileHtml(): void {
         { text: summary.totalConcurrent ? '100,0%' : '0,0%', fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 }
       ]);
 
-      const raiPdfNote = 'Número de atendimentos foi ' + summary.total + ', dado pelo número de RAIs registrados, enquanto houveram ' + summary.totalConcurrent + ' naturezas atendidas.' + (summary.multiNatureOccs > 0 ? ' (' + summary.multiNatureOccs + ' ocorrência(s) possuíam mais de uma natureza e todas foram mencionadas e contabilizadas abaixo.)' : '');
+      const raiPdfNote =
+        'RAIs Registrados (Atendimentos): ' + summary.total + '   |   Naturezas Atendidas: ' + summary.totalConcurrent + '\\n' +
+        'Número de atendimentos foi ' + summary.total + ', dado pelo número de RAIs registrados, enquanto houveram ' + summary.totalConcurrent + ' naturezas atendidas (incluindo ocorrências de Produtividade).' +
+        (summary.multiNatureOccs > 0 ? ' (' + summary.multiNatureOccs + ' ocorrência(s) possuíam mais de uma natureza e todas foram mencionadas e contabilizadas abaixo.)' : '');
 
       const contentBlocks = [
         { table: { headerRows: 1, dontBreakRows: true, widths: mainWidths, body }, layout: 'lightHorizontalLines' },
-        { text: 'QUADRO RESUMO — QUANTITATIVO DE NATUREZAS ATENDIDAS', fontSize: 9.5, bold: true, margin: [0, 14, 0, 2] },
+        { text: 'QUADRO RESUMO ANALÍTICO — QUANTITATIVO DE NATUREZAS ATENDIDAS', fontSize: 9.5, bold: true, margin: [0, 14, 0, 2] },
         { text: raiPdfNote, fontSize: 7.5, bold: true, color: '#0369A1', margin: [0, 0, 0, 6] },
         { table: { headerRows: 1, dontBreakRows: true, widths: isL ? [240, 110, 48] : ['*', 95, 40], body: groupBody }, layout: 'lightHorizontalLines', margin: [0, 0, 0, 10] },
         { table: { headerRows: 1, dontBreakRows: true, widths: isL ? [120, 46, 110, '*', 90, 38] : [86, 38, 76, '*', 76, 32], body: natureBody }, layout: 'lightHorizontalLines' }
       ];
-
-      if (summary.prodTotal > 0) {
-        const prodBody = [[
-          { text: 'CÓDIGO', fillColor: '#1E293B', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
-          { text: 'SUB-GRUPO', fillColor: '#1E293B', color: '#FFFFFF', bold: true, fontSize: 7 },
-          { text: 'NATUREZA DE PRODUTIVIDADE', fillColor: '#1E293B', color: '#FFFFFF', bold: true, fontSize: 7 },
-          { text: 'EXCLUSIVA', fillColor: '#1E293B', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
-          { text: 'COM OUTRA NAT.', fillColor: '#1E293B', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
-          { text: 'ATENDIMENTOS', fillColor: '#1E293B', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' },
-          { text: '%', fillColor: '#1E293B', color: '#FFFFFF', bold: true, fontSize: 7, alignment: 'center' }
-        ]];
-        summary.byProd.forEach((p, i) => {
-          const f = i % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
-          prodBody.push([
-            { text: p.code, fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
-            { text: p.subGroup, fillColor: f, fontSize: 6.5 },
-            { text: p.nature, fillColor: f, fontSize: 6.5 },
-            { text: String(p.exclusiveCount), fillColor: f, alignment: 'center', fontSize: 6.5 },
-            { text: String(p.mixedCount), fillColor: f, alignment: 'center', fontSize: 6.5 },
-            { text: String(p.totalCount), fillColor: f, bold: true, alignment: 'center', fontSize: 6.5 },
-            { text: pctStr(p.pct), fillColor: f, alignment: 'center', fontSize: 6.5 }
-          ]);
-        });
-        prodBody.push([
-          { text: 'TOTAL GERAL DE PRODUTIVIDADE', colSpan: 3, fillColor: '#E2E8F0', bold: true, fontSize: 7 },
-          {}, {},
-          { text: String(summary.prodExcl), fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 },
-          { text: String(summary.prodMixed), fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 },
-          { text: String(summary.prodTotal), fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 },
-          { text: '100,0%', fillColor: '#E2E8F0', bold: true, alignment: 'center', fontSize: 7 }
-        ]);
-        contentBlocks.push(
-          { text: 'QUADRO À PARTE — ATENDIMENTOS COM NATUREZA DE PRODUTIVIDADE', fontSize: 9, bold: true, margin: [0, 14, 0, 2] },
-          { text: 'Total: ' + summary.prodTotal + ' | Exclusivas: ' + summary.prodExcl + ' | Mistas: ' + summary.prodMixed, fontSize: 7, color: '#475569', margin: [0, 0, 0, 6] },
-          { table: { headerRows: 1, dontBreakRows: true, widths: isL ? [48, 85, '*', 48, 62, 58, 38] : [42, 64, '*', 40, 50, 48, 30], body: prodBody }, layout: 'lightHorizontalLines' }
-        );
-      }
 
       return {
         pageSize: 'A4',
@@ -1491,7 +1488,7 @@ export function exportStandaloneSingleFileHtml(): void {
                       stack: [
                         { text: title, fontSize: 10.5, bold: true, color: '#0F172A' },
                         { text: subtitle, fontSize: 7.5, color: '#475569', margin: [0, 2, 0, 2] },
-                        { text: 'Ala de Serviço: Ala ' + wing + '   |   Período: ' + start + ' a ' + end, fontSize: 7, bold: true, color: '#0F172A' }
+                        { text: 'Ala de Serviço: Ala ' + wing + '   |   Período: ' + start + ' a ' + end + (department ? ('   |   ' + department) : ''), fontSize: 7, bold: true, color: '#0F172A' }
                       ]
                     }
                   ]
@@ -1513,15 +1510,15 @@ export function exportStandaloneSingleFileHtml(): void {
         footer: (cp, pc) => ({
           margin: [24, 8, 24, 8],
           columns: [
-            { text: 'DOCUMENTO DE USO CORPORATIVO / RESERVADO • GERADO CLIENT-SIDE', fontSize: 6.5, color: '#64748B' },
-            { text: 'Página ' + cp + ' de ' + pc, fontSize: 7, alignment: 'right', color: '#0F172A', bold: true }
+            { width: '*', text: footerText, fontSize: 6.5, color: '#64748B' },
+            { width: 90, text: 'Página ' + cp + ' de ' + pc, fontSize: 7, alignment: 'right', color: '#0F172A', bold: true }
           ]
         }),
         content: contentBlocks
       };
     }
 
-    ['cfgWing', 'cfgStart', 'cfgEnd', 'cfgOrientation', 'cfgTitle', 'cfgSubtitle'].forEach(id => {
+    ['cfgWing', 'cfgStart', 'cfgEnd', 'cfgOrientation', 'cfgTitle', 'cfgSubtitle', 'cfgDepartment', 'cfgFooter'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
         saveSettings();
         if (currentData) renderAll();

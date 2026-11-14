@@ -98,17 +98,17 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                 3. Conferência das Naturezas Detectadas &amp; Produtividade
               </h3>
               <span className="text-xs font-mono text-slate-500">
-                {summary.totalOccurrences} atendimentos (RAIs) · {summary.totalConcurrentNatures} naturezas atendidas
-                {summary.productivityTotalCount > 0 ? ` · ${summary.productivityTotalCount} produtividade` : ''}
+                {summary.totalOccurrences} RAIs · {summary.totalConcurrentNatures} naturezas atendidas
+                {summary.productivityTotalCount > 0 ? ` (${summary.productivityTotalCount} de Produtividade incluídas no quadro)` : ''}
               </span>
             </div>
             <p className="text-xs text-slate-600 mt-0.5">
               {needsActionCount > 0 ? (
                 <>
-                  Existem <strong className="text-amber-800">{needsActionCount} ocorrência(s)</strong> sem classificação automática no catálogo. Selecione a natureza correspondente abaixo. Ocorrências com duas ou mais naturezas têm todas contabilizadas nas tabelas.
+                  Existem <strong className="text-amber-800">{needsActionCount} ocorrência(s)</strong> sem classificação automática no catálogo. Selecione a natureza correspondente abaixo. Todas as naturezas (incluindo Produtividade) são contabilizadas no Quadro Resumo analítico.
                 </>
               ) : (
-                `Número de atendimentos foi ${summary.totalOccurrences} (RAIs registrados), enquanto houveram ${summary.totalConcurrentNatures} naturezas atendidas. Todas as ocorrências com mais de uma natureza tiveram todas as naturezas contabilizadas no Quadro Resumo.`
+                `Número de atendimentos foi ${summary.totalOccurrences} (RAIs registrados), enquanto houveram ${summary.totalConcurrentNatures} naturezas atendidas. Todas as naturezas identificadas (incluindo Produtividade) são somadas diretamente no Quadro Resumo analítico.`
               )}
             </p>
           </div>
@@ -178,11 +178,11 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                         </span>
                       ) : item.hasMultipleCandidates ? (
                         <span className="font-semibold text-sky-800">
-                          {item.operationalCandidates.length > 1 ? item.operationalCandidates.length : item.candidates.length} naturezas identificadas — todas somadas nas tabelas
+                          {item.candidates.length} naturezas identificadas — todas somadas no Quadro Resumo
                         </span>
                       ) : item.isExclusiveProductivity ? (
                         <span className="font-semibold text-sky-800">
-                          Exclusiva de Produtividade — contabilizada em Produtividade
+                          Produtividade — contabilizada no Quadro Resumo analítico
                         </span>
                       ) : item.isManuallyOverridden ? (
                         <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
@@ -196,7 +196,7 @@ export const NatureClassificationPanel: React.FC<NatureClassificationPanelProps>
                         <>
                           <span className="text-slate-300">·</span>
                           <span className="text-sky-700 font-medium">
-                            + {item.productivityEntries.length} natureza(s) de Produtividade no quadro à parte
+                            + {item.productivityEntries.length} natureza(s) de Produtividade no quadro analítico
                           </span>
                         </>
                       )}
